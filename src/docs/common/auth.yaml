@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+  title: Auth API
+  version: 1.0.0
+  description: Authentication endpoints for registering and logging in users (for both `e-cart` and `shortVideo` applications)
+
+paths:
+  /api/v1/common/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user (user)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [user, seller]
+                  default: user
+                referralCode:
+                  type: string
+                  description: Required only if `loginApp` is `shortVideo`
+                loginApp:
+                  type: string
+                  enum: [e-cart, shortVideo]
+                  default: e-cart
+                state_address:
+                  type: string
+                  description: Required only if `loginApp` is `e-cart`
+      responses:
+        '200':
+          description: Success or failure based on registration logic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    oneOf:
+                      - type: 'null'
+                      - type: object
+                        properties:
+                          token:
+                            type: string
+                          user:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                              role:
+                                type: string
+                              applications:
+                                type: array
+                                items:
+                                  type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Internal Server Error
+                  data:
+                    type: 'null'
+
+  /api/v1/common/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                loginApp:
+                  type: string
+                  enum: [e-cart, shortVideo]
+                  default: e-cart
+      responses:
+        '200':
+          description: Success or failure based on login logic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    oneOf:
+                      - type: 'null'
+                      - type: object
+                        properties:
+                          token:
+                            type: string
+                          user:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                              role:
+                                type: string
+                              applications:
+                                type: array
+                                items:
+                                  type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Internal Server Error
+                  data:
+                    type: 'null'

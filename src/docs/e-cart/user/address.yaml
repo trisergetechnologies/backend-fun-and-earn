@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: E-Cart Address API
+  version: 1.0.0
+  description: Basic endpoints to manage user addresses in the E-Cart application.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /ecart/addresses:
+    get:
+      tags: [Address]
+      summary: Get all or a specific address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: slug
+          schema:
+            type: string
+          description: Slug name to fetch a specific address
+      responses:
+        '200':
+          description: Address(es) fetched
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AddressResponse'
+                  - $ref: '#/components/schemas/AddressListResponse'
+
+  /ecart/address/add:
+    post:
+      tags: [Address]
+      summary: Add new address
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressInput'
+      responses:
+        '201':
+          description: Address added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+
+  /ecart/address/{slug}:
+    patch:
+      tags: [Address]
+      summary: Update an address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressInput'
+      responses:
+        '200':
+          description: Address updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+
+    delete:
+      tags: [Address]
+      summary: Delete an address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Address deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Address:
+      type: object
+      properties:
+        slugName:
+          type: string
+        addressName:
+          type: string
+        fullName:
+          type: string
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        pincode:
+          type: string
+        phone:
+          type: string
+        isDefault:
+          type: boolean
+
+    AddressInput:
+      type: object
+      required:
+        - addressName
+        - fullName
+        - street
+        - city
+        - state
+        - pincode
+        - phone
+      properties:
+        addressName:
+          type: string
+        fullName:
+          type: string
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        pincode:
+          type: string
+        phone:
+          type: string
+        isDefault:
+          type: boolean
+
+    AddressResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Address'
+
+    AddressListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: 'null'

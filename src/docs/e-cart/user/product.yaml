@@ -1,0 +1,102 @@
+openapi: 3.0.3
+info:
+  title: E-Cart Product API
+  version: 1.0.0
+  description: Endpoints for retrieving and searching products in the E-Cart application.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /e-cart/products:
+    get:
+      tags: [Product - User]
+      summary: Get all or a specific product
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: string
+          description: Product ID to fetch a single product
+      responses:
+        '200':
+          description: Product(s) fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+
+  /e-cart/products/search:
+    get:
+      tags: [Product - User]
+      summary: Search products
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: keyword
+          schema:
+            type: string
+          description: Search keyword for title or description
+        - in: query
+          name: categoryId
+          schema:
+            type: string
+          description: Category ID to filter search
+      responses:
+        '200':
+          description: Products matching search criteria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        _id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        isActive:
+          type: boolean
+        categoryId:
+          type: object
+          properties:
+            title:
+              type: string
+            slug:
+              type: string
+        sellerId:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+
+    ProductListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
