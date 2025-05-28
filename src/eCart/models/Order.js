@@ -25,6 +25,8 @@ const OrderItemSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+
+  // Snapshot fields (immutable record)
   priceAtPurchase: {
     type: Number,
     required: true
@@ -32,6 +34,17 @@ const OrderItemSchema = new mongoose.Schema({
   finalPriceAtPurchase: {
     type: Number,
     required: true
+  },
+  productTitle: {
+    type: String,
+    required: true
+  },
+  productThumbnail: {
+    type: String
+  },
+  returnPolicyDays: {
+    type: Number,
+    default: 3
   }
 }, { _id: false });
 
@@ -44,7 +57,7 @@ const OrderSchema = new mongoose.Schema({
 
   items: [OrderItemSchema],
 
-  deliveryAddress: AddressSnapshotSchema, // snapshot of address at time of order
+  deliveryAddress: AddressSnapshotSchema, // captured at time of placing
 
   usedWalletAmount: {
     type: Number,
@@ -74,8 +87,13 @@ const OrderSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ['placed', 'processing', 'shipped', 'delivered', 'cancelled'],
+    enum: ['placed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'],
     default: 'placed'
+  },
+
+  paymentInfo: {
+    gateway: { type: String, default: 'mock' },  // or 'razorpay'
+    paymentId: { type: String }
   },
 
   cancelRequested: {
@@ -91,7 +109,38 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     enum: ['not_applicable', 'pending', 'refunded'],
     default: 'not_applicable'
+  },
+
+  returnRequested: {
+    type: Boolean,
+    default: false
+  },
+
+  returnReason: {
+    type: String,
+    default: null
+  },
+
+  returnStatus: {
+    type: String,
+    enum: ['none', 'pending', 'approved', 'rejected', 'completed'],
+    default: 'none'
+  },
+
+  trackingUpdates: [{
+  status: {
+    type: String,
+    enum: ['placed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  },
+  note: {
+    type: String,
+    default: ''
   }
+}]
 
 }, { timestamps: true });
 

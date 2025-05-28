@@ -8,7 +8,7 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
-const commonRouter = require('./routes');
+const router = require('./routes');
 
 /**
  * Creates a new Express application with base configuration
@@ -49,7 +49,7 @@ const createApp = () => {
   // API Routes
   // ======================
   // Import routes
-  app.use('/api/v1', commonRouter);
+  app.use('/api/v1', router);
 
 
   return app;

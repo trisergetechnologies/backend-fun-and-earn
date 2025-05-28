@@ -1,8 +1,16 @@
 const express = require('express');
+const router = express.Router();
+
+//common router imports
 const authRouter = require('./auth.routes');
 
-const commonRouter = express.Router();
+//eCart router import
+const eCartRouter = require('../eCart/routes');
 
-commonRouter.use('/auth', authRouter);
+//Common Routes
+router.use('/auth', authRouter);
 
-module.exports = commonRouter;
+//eCart Routes
+router.use('/ecart', eCartRouter);
+
+module.exports = router;

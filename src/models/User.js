@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 // Address schema embedded in eCartProfile
 const AddressSchema = new mongoose.Schema({
   addressName: String,
-  slugName: { type: String, unique: true }, // Unique slug for address
+  slugName: { type: String }, // Unique slug for address
   fullName: String,
   street: String,
   city: String,

@@ -1,8 +1,10 @@
-const express = require('express');
-const userProductRouter = require('./user/product.routes.user');
+const express = require("express");
 const eCartRouter = express.Router();
 
-eCartRouter.use('/ecart', userProductRouter);
+const eCartUserRouter = require("./user");
+const authMiddleware = require("../../middlewares/authMiddleware");
 
 
-modifyRoutes(eCartRouter);
+eCartRouter.use('/user', authMiddleware(["user"]), eCartUserRouter);
+
+module.exports = eCartRouter;

@@ -24,7 +24,7 @@ const WalletTransactionSchema = new mongoose.Schema({
   // From which wallet (source of funds)
   fromWallet: {
     type: String,
-    enum: ['shortVideoWallet', 'eCartWallet', 'rewardWallet'],
+    enum: ['shortVideoWallet', 'eCartWallet', 'reward'],
     required: true
   },
 
