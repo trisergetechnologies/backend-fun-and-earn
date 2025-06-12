@@ -12,5 +12,4 @@ router.use('/auth', authRouter);
 
 //eCart Routes
 router.use('/ecart', eCartRouter);
-
 module.exports = router;

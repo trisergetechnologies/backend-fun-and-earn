@@ -1,9 +1,10 @@
+const Category = require("../eCart/models/Category");
 const User = require("../models/User");
 const { hashPassword, verifyPassword } = require("../utils/bcrypt");
 const { generateToken } = require("../utils/jwt");
 
 // Only user and seller can self-register
-const ALLOWED_ROLES = ['user'];
+const ALLOWED_ROLES = ['user', 'seller'];
 
 exports.register = async (req, res) => {
   try {

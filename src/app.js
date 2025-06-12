@@ -9,6 +9,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const router = require('./routes');
+const path = require('path');
 
 /**
  * Creates a new Express application with base configuration
@@ -18,7 +19,7 @@ const router = require('./routes');
 const createApp = () => {
   // Initialize Express application
   const app = express();
-  
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
   // ======================
   // Essential Middleware
   // ======================
