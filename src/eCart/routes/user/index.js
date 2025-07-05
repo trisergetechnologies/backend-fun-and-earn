@@ -14,7 +14,7 @@ eCartUserRouter.use('/order', userOrderRouter);
 
 
 
-eCartUserRouter.use('/categories', async (req, res)=>{
+eCartUserRouter.get('/categories', async (req, res)=>{
       try {
     const categories = await Category.find({ isActive: true })
       .select('title slug description') // Include only useful fields
