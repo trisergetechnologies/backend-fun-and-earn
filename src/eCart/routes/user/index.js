@@ -15,9 +15,7 @@ eCartUserRouter.use('/order', userOrderRouter);
 
 const getCategories = async (req, res)=>{
     try {
-    const categories = await Category.find({ isActive: true })
-      .select('title slug description') // Include only useful fields
-      .sort({ createdAt: -1 });
+    const categories = await Category.find({ isActive: true });
 
     res.status(200).json({
       success: true,
