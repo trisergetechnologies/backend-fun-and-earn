@@ -6,9 +6,13 @@ const CouponSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-
+  title: {
+    type: String,
+    default: 'Earned Coupon'
+  },
   description: {
-    type: String
+    type: String,
+    default: "Valid once per user. Redeem on Short Videos."
   },
 
   earnedBy: {
