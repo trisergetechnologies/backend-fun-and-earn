@@ -6,7 +6,7 @@ const Category = require("../../models/Category");
 exports.getProducts = async (req, res) => {
   try {
     const user = req.user;
-       const { id, slug } = req.params;
+    const { id, slug } = req.params;
 
     if (user.role !== 'user') {
       return res.status(200).json({
@@ -30,7 +30,7 @@ exports.getProducts = async (req, res) => {
         });
       }
 
-          // 🔍 If category slug is provided → find matching category
+    // 🔍 If category slug is provided → find matching category
     if (slug) {
       const category = await Category.findOne({ slug });
       if (!category) {

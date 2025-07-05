@@ -8,7 +8,8 @@ const Category = require('../../models/Category');
 const eCartUserRouter = Express.Router();
 
 eCartUserRouter.use('/address', userAddressRouter);
-eCartUserRouter.use('/product', userProductRouter);
+eCartUserRouter.use('/product/:id', userProductRouter);
+eCartUserRouter.use('/product/slug/:slug', userProductRouter);
 eCartUserRouter.use('/cart', userCartRouter);
 eCartUserRouter.use('/order', userOrderRouter);
 
