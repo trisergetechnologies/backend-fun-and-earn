@@ -13,9 +13,8 @@ eCartUserRouter.use('/cart', userCartRouter);
 eCartUserRouter.use('/order', userOrderRouter);
 
 
-
-eCartUserRouter.get('/categories', async (req, res)=>{
-      try {
+const getCategories = async (req, res)=>{
+    try {
     const categories = await Category.find({ isActive: true })
       .select('title slug description') // Include only useful fields
       .sort({ createdAt: -1 });
@@ -32,7 +31,9 @@ eCartUserRouter.get('/categories', async (req, res)=>{
       error: error.message,
     });
   }
-});
+}
+
+eCartUserRouter.get('/categories', getCategories);
 
 
 module.exports = eCartUserRouter
