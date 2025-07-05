@@ -30,8 +30,15 @@ exports.getProducts = async (req, res) => {
         });
       }
 
-    // 🔍 If category slug is provided → find matching category
-    if (slug) {
+      return res.status(200).json({
+        success: true,
+        message: 'Product fetched successfully',
+        data: product
+      });
+    }
+
+        // 🔍 If category slug is provided → find matching category
+    else if (slug) {
       const category = await Category.findOne({ slug });
       if (!category) {
         return res.status(200).json({
@@ -52,13 +59,6 @@ exports.getProducts = async (req, res) => {
         success: true,
         message: `Products in category '${category.title}' fetched successfully`,
         data: categoryProducts
-      });
-    }
-
-      return res.status(200).json({
-        success: true,
-        message: 'Product fetched successfully',
-        data: product
       });
     }
 
