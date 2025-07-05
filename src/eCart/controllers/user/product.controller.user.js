@@ -1,11 +1,12 @@
 const mongoose = require("mongoose");
 const Product = require("../../models/Product");
+const Category = require("../../models/Category");
 
 
 exports.getProducts = async (req, res) => {
   try {
     const user = req.user;
-    const { id } = req.params;
+       const { id, slug } = req.params;
 
     if (user.role !== 'user') {
       return res.status(200).json({
@@ -28,6 +29,31 @@ exports.getProducts = async (req, res) => {
           data: null
         });
       }
+
+          // 🔍 If category slug is provided → find matching category
+    if (slug) {
+      const category = await Category.findOne({ slug });
+      if (!category) {
+        return res.status(200).json({
+          success: false,
+          message: 'Category not found',
+          data: null
+        });
+      }
+
+      const categoryProducts = await Product.find({
+        isActive: true,
+        categoryId: category._id
+      })
+        .populate('categoryId', 'title slug')
+        .populate('sellerId', 'name email');
+
+      return res.status(200).json({
+        success: true,
+        message: `Products in category '${category.title}' fetched successfully`,
+        data: categoryProducts
+      });
+    }
 
       return res.status(200).json({
         success: true,
