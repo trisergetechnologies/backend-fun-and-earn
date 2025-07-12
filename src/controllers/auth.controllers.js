@@ -74,6 +74,7 @@ exports.register = async (req, res) => {
     }
 
     // Optionally delete OTP after successful validation
+    await Otp.deleteMany({email});
     await Otp.deleteOne({ _id: existingOtp._id });
   }
 
