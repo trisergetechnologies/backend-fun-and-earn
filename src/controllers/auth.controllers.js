@@ -1,5 +1,5 @@
 const Category = require("../eCart/models/Category");
-const { default: Otp } = require("../models/Otp");
+const { Otp } = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword, verifyPassword } = require("../utils/bcrypt");
 const { generateToken } = require("../utils/jwt");
