@@ -1,11 +1,12 @@
 const express = require('express');
-const { login, register } = require('../controllers/auth.controllers');
+const { login, register, sendOtp } = require('../controllers/auth.controllers');
 const Product = require('../eCart/models/Product');
 const Category = require('../eCart/models/Category');
 const authRouter = express.Router();
 
 authRouter.post('/register', register)
 authRouter.post('/login', login);
+authRouter.post('/sendotp', sendOtp);
 
 authRouter.post('/mockdata', async (req, res) => {
      try {

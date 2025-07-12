@@ -63,6 +63,7 @@ const UserSchema = new mongoose.Schema({
     eCartWallet: { type: Number, default: 0 },
     rewardWallet: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' }]
   },
+  isActive: { type: Boolean, tdefault: true },
 
   token: { type: String, default: "jwt_token" }, // JWT token for user sessions
 }, { timestamps: true });
