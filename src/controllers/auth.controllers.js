@@ -231,7 +231,8 @@ exports.sendOtp = async (req, res) => {
   try {
     
     // Save new OTP
-    await Otp.create({ email, otp });
+    const otpDoc = new Otp({ email, otp });
+    await otpDoc.save();
 
     // Send email
     await transporter.sendMail(mailOptions);
