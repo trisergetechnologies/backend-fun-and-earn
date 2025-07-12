@@ -229,9 +229,7 @@ exports.sendOtp = async (req, res) => {
   };
 
   try {
-    // Remove old OTPs for this email
-    await Otp.deleteMany({ email });
-
+    
     // Save new OTP
     await Otp.create({ email, otp });
 
