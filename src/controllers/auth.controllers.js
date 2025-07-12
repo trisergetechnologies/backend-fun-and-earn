@@ -1,5 +1,5 @@
 const Category = require("../eCart/models/Category");
-const { Otp } = require("../models/Otp");
+const Otp = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword, verifyPassword } = require("../utils/bcrypt");
 const { generateToken } = require("../utils/jwt");
@@ -229,7 +229,7 @@ exports.sendOtp = async (req, res) => {
   };
 
   try {
-    
+
     // Save new OTP
     const otpDoc = new Otp({ email, otp });
     await otpDoc.save();
