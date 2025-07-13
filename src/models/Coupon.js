@@ -37,7 +37,10 @@ const CouponSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-
+  value: {
+    type: Number,
+    default: 0
+  },
   // not applicable for now
   expiresAt: {
     type: Date
