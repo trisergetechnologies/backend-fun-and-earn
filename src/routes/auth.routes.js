@@ -2,11 +2,15 @@ const express = require('express');
 const { login, register, sendOtp } = require('../controllers/auth.controllers');
 const Product = require('../eCart/models/Product');
 const Category = require('../eCart/models/Category');
+const { shortVideoActivate, eCartActivate } = require('../controllers/activate.controllers');
+const authMiddleware = require('../middlewares/authMiddleware');
 const authRouter = express.Router();
 
 authRouter.post('/register', register)
 authRouter.post('/login', login);
 authRouter.post('/sendotp', sendOtp);
+authRouter.post('/activateshortvideo', authMiddleware(['user']) , shortVideoActivate);
+authRouter.post('/activateecart', authMiddleware(['user']) ,eCartActivate);
 
 authRouter.post('/mockdata', async (req, res) => {
      try {
