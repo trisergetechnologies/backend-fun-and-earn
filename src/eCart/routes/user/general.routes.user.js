@@ -4,9 +4,9 @@ const userGeneralRouter = Express.Router()
 
 userGeneralRouter.get('/getprofile', getUserProfile);
 userGeneralRouter.patch('/updateprofile', updateProfile);
-userGeneralRouter.post('/addBankDetails', addBankDetails);
-userGeneralRouter.patch('/updateBankDetails', updateBankDetails);
-userGeneralRouter.delete('/deleteBankDetails', deleteBankDetails);
-userGeneralRouter.get('/getRewards', getRewards);
+userGeneralRouter.post('/addbankdetails', addBankDetails);
+userGeneralRouter.patch('/updatebankdetails', updateBankDetails);
+userGeneralRouter.delete('/deletebankdetails', deleteBankDetails);
+userGeneralRouter.get('/getrewards', getRewards);
 
 module.exports = userGeneralRouter;
