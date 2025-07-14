@@ -9,8 +9,8 @@ const authRouter = express.Router();
 authRouter.post('/register', register)
 authRouter.post('/login', login);
 authRouter.post('/sendotp', sendOtp);
-authRouter.post('/activateshortvideo', authMiddleware(['user']) , shortVideoActivate);
-authRouter.post('/activateecart', authMiddleware(['user']) ,eCartActivate);
+authRouter.post('/activateshortvideo', authMiddleware(["user"]) , shortVideoActivate);
+authRouter.post('/activateecart', authMiddleware(["user"]) ,eCartActivate);
 
 authRouter.post('/mockdata', async (req, res) => {
      try {
