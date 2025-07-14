@@ -112,6 +112,7 @@ exports.register = async (req, res) => {
         user: {
           id: newUser._id,
           name: newUser.name,
+          email: newUser.email,
           role: newUser.role,
           applications: newUser.applications,
           phone: newUser.phone,
@@ -188,6 +189,7 @@ exports.login = async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
+          email: user.email,
           role: user.role,
           applications: user.applications,
           phone: user.phone,
