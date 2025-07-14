@@ -114,8 +114,8 @@ exports.register = async (req, res) => {
           name: newUser.name,
           role: newUser.role,
           applications: newUser.applications,
-          phone: user.phone,
-          referralCode: referralCode,
+          phone: newUser.phone,
+          referralCode: newUser.referralCode,
         }
       }
     });
@@ -191,7 +191,7 @@ exports.login = async (req, res) => {
           role: user.role,
           applications: user.applications,
           phone: user.phone,
-          referralCode: referralCode,
+          referralCode: user.referralCode,
         }
       }
     });
