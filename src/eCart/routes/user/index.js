@@ -5,6 +5,7 @@ const userCartRouter = require('./cart.routes.user');
 const userOrderRouter = require('./order.routes.user');
 const Category = require('../../models/Category');
 const userWalletRouter = require('./wallet.routes.user');
+const userGeneralRouter = require('./general.routes.user');
 
 const eCartUserRouter = Express.Router();
 
@@ -13,6 +14,7 @@ eCartUserRouter.use('/product', userProductRouter);
 eCartUserRouter.use('/cart', userCartRouter);
 eCartUserRouter.use('/order', userOrderRouter);
 eCartUserRouter.use('/wallet', userWalletRouter);
+eCartUserRouter.use('/general', userGeneralRouter);
 
 
 const getCategories = async (req, res)=>{

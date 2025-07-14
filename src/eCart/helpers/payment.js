@@ -2,7 +2,7 @@ const FailedPayment = require("../models/FailedPayment");
 
 
 // ✅ 1. MOCK PAYMENT VERIFICATION
-exports.verifyPayment = async (paymentId) => {
+exports.verifyPayment = async (paymentId, amount) => {
   // Simulate delay
   console.log(`[MOCK] Verifying payment: ${paymentId}`);
 
@@ -10,7 +10,7 @@ exports.verifyPayment = async (paymentId) => {
   return {
     status: 'success', // or 'failed'
     gateway: 'mock',
-    amount: 999, 
+    amount: amount, 
     currency: 'INR'
   };
 };

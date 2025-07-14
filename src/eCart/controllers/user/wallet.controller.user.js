@@ -1,4 +1,5 @@
 const User = require("../../../models/User");
+const WalletTransaction = require("../../../models/WalletTransaction");
 
 exports.getWallet = async (req, res) => {
   const userId = req.user._id;
@@ -26,6 +27,29 @@ exports.getWallet = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch wallet data'
+    });
+  }
+};
+
+
+exports.getWalletTransactions = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Fetch transactions from DB directly, sorted by newest first
+    const transactions = await WalletTransaction.find({ userId }).sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: transactions.length,
+      data: transactions,
+    });
+
+  } catch (error) {
+    console.error('Error fetching wallet transactions:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
     });
   }
 };
