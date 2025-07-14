@@ -201,10 +201,12 @@ exports.getUserProfile = async (req, res) => {
       success: true,
       message: 'User profile fetched successfully',
       data: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
         phone: user.phone,
+        eCartProfile: user.eCartProfile,
+        shortVideoProfile: user.shortVideoProfile,
         role: user.role,
         applications: user.applications,
         state_address: user.state_address,
