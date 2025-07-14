@@ -191,3 +191,35 @@ exports.changePassword = async (req, res) => {
     return res.status(200).json({ success: false, message: 'Internal Server Error', data: null });
   }
 };
+
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    const user = req.user;
+
+    return res.status(200).json({
+      success: true,
+      message: 'User profile fetched successfully',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        applications: user.applications,
+        state_address: user.state_address,
+        referralCode: user.referralCode,
+        referredBy: user.referredBy,
+        wallets: user.wallets,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('Get User Error:', err);
+    return res.status(200).json({
+      success: false,
+      message: 'Internal Server Error',
+      data: null
+    });
+  }
+};
