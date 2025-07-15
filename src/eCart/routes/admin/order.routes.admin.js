@@ -4,9 +4,10 @@ const { getOrders, updateOrderStatus } = require('../../controllers/admin/order.
 const adminOrderRouter = express.Router();
 
 adminOrderRouter.get('/getorders', getOrders);
-adminOrderRouter.get('/orders/:id', getOrders);
+adminOrderRouter.get('/orders', getOrders);
+adminOrderRouter.get('/order/:id', getOrders);
 
-adminOrderRouter.put('/order/:id/status', updateOrderStatus);
+adminOrderRouter.put('/order/updatestatus/:id', updateOrderStatus);
 
 
 module.exports = adminOrderRouter;

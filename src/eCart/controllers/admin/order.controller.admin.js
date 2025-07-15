@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Order = require('../../models/Order');
 const Product = require('../../models/Product');
 const User = require('../../../models/User');
+const generateCouponForOrder = require('../../helpers/generateCoupon');
 
 // 1. Get Orders
 exports.getOrders = async (req, res) => {
@@ -121,6 +122,10 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
+
+    if(order.status === 'shipped' || order.status === 'delivered'){
+      await generateCouponForOrder(order);
+    }
 
     return res.status(200).json({
       success: true,

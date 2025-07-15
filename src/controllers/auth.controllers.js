@@ -13,6 +13,7 @@ exports.register = async (req, res) => {
     const {
       name,
       email,
+      gender,
       phone,
       password,
       role = 'user',
@@ -27,7 +28,7 @@ exports.register = async (req, res) => {
     }
 
     // Required field check based on application
-    if (!name || !password || !email) {
+    if (!name || !password || !email || !gender) {
       return res.status(200).json({ success: false, message: 'Name, email, and password are required', data: null });
     }
 
@@ -86,6 +87,7 @@ exports.register = async (req, res) => {
     const newUser = new User({
       name,
       email,
+      gender,
       phone,
       password: hashedPassword,
       role,
@@ -113,6 +115,7 @@ exports.register = async (req, res) => {
           id: newUser._id,
           name: newUser.name,
           email: newUser.email,
+          gender: newUser.gender,
           role: newUser.role,
           applications: newUser.applications,
           phone: newUser.phone,
@@ -190,6 +193,7 @@ exports.login = async (req, res) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          gender: user.gender,
           role: user.role,
           applications: user.applications,
           phone: user.phone,

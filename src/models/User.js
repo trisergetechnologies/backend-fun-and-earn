@@ -27,6 +27,11 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, sparse: true }, 
   phone: { type: String, unique: true },
   password: { type: String, required: true },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other'],
+    required: true,
+  },
 
   role: {
     type: String,

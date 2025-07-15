@@ -204,6 +204,7 @@ exports.getUserProfile = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        gender: user.gender,
         phone: user.phone,
         eCartProfile: user.eCartProfile,
         shortVideoProfile: user.shortVideoProfile,

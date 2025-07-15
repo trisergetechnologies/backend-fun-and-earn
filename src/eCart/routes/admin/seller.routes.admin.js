@@ -5,7 +5,7 @@ const adminSellerRouter = express.Router();
 
 adminSellerRouter.post('/createseller', createSeller);
 adminSellerRouter.get('/getsellers', getSellers);
-adminSellerRouter.get('getsellers/:id', getSellers);
+adminSellerRouter.get('/getsellers/:id', getSellers);
 adminSellerRouter.put('/seller/:id', updateSeller);
 adminSellerRouter.delete('/seller/:id', deleteSeller);
 
