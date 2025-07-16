@@ -30,7 +30,7 @@ const singleImageUpload = (fieldName) => {
       }
 
       if (req.file) {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const baseUrl = `https://${req.get('host')}`;
         req.file.url = `${baseUrl}/uploads/${req.file.filename}`;
       }
 
