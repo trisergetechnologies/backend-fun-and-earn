@@ -168,9 +168,9 @@ exports.login = async (req, res) => {
       return res.status(200).json({ success: false, message: 'Invalid credentials', data: null });
     }
 
-    if(user.role !== 'user') {
-      return res.status(200).json({ success: false, message: 'Invalid role for login', data: null });
-    }
+    // if(user.role !== 'user') {
+    //   return res.status(200).json({ success: false, message: 'Invalid role for login', data: null });
+    // }
 
     if (!user.applications.includes(loginApp)) {
       return res.status(200).json({
