@@ -27,7 +27,7 @@ exports.createSeller = async (req, res) => {
       email,
       phone,
       gender,
-      hashedPassword,
+      password: hashedPassword,
       role: 'seller',
       applications: ['eCart'],
       isActive: true
