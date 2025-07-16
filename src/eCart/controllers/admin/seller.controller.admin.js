@@ -5,7 +5,7 @@ exports.createSeller = async (req, res) => {
   try {
     const admin = req.user;
 
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, gender } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ 
@@ -25,6 +25,7 @@ exports.createSeller = async (req, res) => {
       name,
       email,
       phone,
+      gender,
       password,
       role: 'seller',
       applications: ['eCart'],
