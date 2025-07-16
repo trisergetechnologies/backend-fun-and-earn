@@ -1,4 +1,3 @@
-const Category = require("../eCart/models/Category");
 const Otp = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword, verifyPassword } = require("../utils/bcrypt");
@@ -14,7 +13,6 @@ exports.register = async (req, res) => {
       name,
       email,
       gender,
-      phone,
       password,
       role = 'user',
       referralCode,
@@ -88,7 +86,6 @@ exports.register = async (req, res) => {
       name,
       email,
       gender,
-      phone,
       password: hashedPassword,
       role,
       applications: [loginApp],
@@ -118,7 +115,6 @@ exports.register = async (req, res) => {
           gender: newUser.gender,
           role: newUser.role,
           applications: newUser.applications,
-          phone: newUser.phone,
           referralCode: newUser.referralCode,
         }
       }
