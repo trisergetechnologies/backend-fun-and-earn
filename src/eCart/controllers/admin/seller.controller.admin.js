@@ -1,5 +1,6 @@
 const User = require("../../../models/User");
 const mongoose = require('mongoose');
+const { hashPassword } = require("../../../utils/bcrypt");
 
 exports.createSeller = async (req, res) => {
   try {
@@ -19,14 +20,14 @@ exports.createSeller = async (req, res) => {
         data: null
       });
     }
-
+    const hashedPassword = await hashPassword(password);
     // Create new seller
     const newSeller = await User.create({
       name,
       email,
       phone,
       gender,
-      password,
+      hashedPassword,
       role: 'seller',
       applications: ['eCart'],
       isActive: true
