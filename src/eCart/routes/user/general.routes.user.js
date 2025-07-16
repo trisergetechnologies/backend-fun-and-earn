@@ -3,7 +3,7 @@ const { updateProfile, getUserProfile, addBankDetails, updateBankDetails, delete
 const userGeneralRouter = Express.Router()
 
 userGeneralRouter.get('/getprofile', getUserProfile);
-userGeneralRouter.get('/changepassword', changePassword);
+userGeneralRouter.patch('/changepassword', changePassword);
 userGeneralRouter.patch('/updateprofile', updateProfile);
 userGeneralRouter.post('/addbankdetails', addBankDetails);
 userGeneralRouter.patch('/updatebankdetails', updateBankDetails);
