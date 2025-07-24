@@ -62,6 +62,17 @@ const UserSchema = new mongoose.Schema({
     bankDetails: BankDetailsSchema // For UPI payouts
   },
 
+  serialNumber: {
+    type: Number,
+    unique: true,
+    sparse: true,
+    index: true, // helps with network lookups
+  },
+  package: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Package',
+  },
+
   // Shared wallets used across both apps
   wallets: {
     shortVideoWallet: { type: Number, default: 0 },

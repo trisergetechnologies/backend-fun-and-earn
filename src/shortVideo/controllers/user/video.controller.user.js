@@ -1,65 +1,93 @@
 const User = require("../../../models/User");
 const Video = require("../../models/Video");
 
-exports.uploadVideo = async (req, res) => {
+
+
+const ACCESS_KEY = process.env.BUNNY_API_KEY;
+const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
+const HOSTNAME = process.env.BUNNY_HOSTNAME;
+const CDN_BASE_URL = process.env.BUNNY_CDN_BASE_URL;
+
+
+
+const uploadBufferToBunny = (buffer, remotePath) => {
+  return new Promise((resolve, reject) => {
+    const options = {
+      method: 'PUT',
+      host: HOSTNAME,
+      path: `/${STORAGE_ZONE_NAME}/${remotePath}`,
+      headers: {
+        AccessKey: ACCESS_KEY,
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': buffer.length,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode === 201 || res.statusCode === 200) {
+        resolve();
+      } else {
+        reject(new Error(`BunnyCDN upload failed with status ${res.statusCode}`));
+      }
+    });
+
+    req.on('error', reject);
+    req.write(buffer);
+    req.end();
+  });
+};
+
+const uploadVideo = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { title, description, durationInSec, thumbnailUrl } = req.body;
+    const { title = '', description = '', durationInSec } = req.body;
+    const { file, user } = req;
+    const userId = user._id;
 
-    if (!req.file || !req.file.location) {
-      return res.status(200).json({
-        success: false,
-        message: 'Video upload failed or not found in request.',
-        data: null
-      });
+    const videoCount = await Video.countDocuments({ userId });
+    if (videoCount >= 100) {
+      return res.status(400).json({ success: false, message: 'Upload limit reached (100 videos).' });
     }
 
-    if (!durationInSec || durationInSec > 60) {
-      return res.status(200).json({
-        success: false,
-        message: 'Invalid or too long video duration (max 60 seconds)',
-        data: null
-      });
+    if (!durationInSec || Number(durationInSec) > 60) {
+      return res.status(400).json({ success: false, message: 'Invalid video duration' });
     }
 
-    const user = await User.findById(userId);
-    if (user.shortVideoProfile.videoUploads.length >= 100) {
-      return res.status(200).json({
-        success: false,
-        message: 'Upload limit (100) reached.',
-        data: null
-      });
-    }
+    const ext = file.originalname.split('.').pop();
+    const uniqueName = `user-${userId}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+    const videoUrl = `${CDN_BASE_URL}/${uniqueName}`;
+
+    // Upload to BunnyCDN directly
+    await uploadBufferToBunny(file.buffer, uniqueName);
+
+    const fileSizeInMB = +(file.size / (1024 * 1024)).toFixed(2);
 
     const video = await Video.create({
       userId,
       title,
       description,
-      videoUrl: req.file.location, // Multer-S3 puts the URL in req.file.location
-      thumbnailUrl,
-      durationInSec
+      videoUrl,
+      bunnyFilePath: uniqueName,
+      durationInSec: Number(durationInSec),
+      sizeInMB: fileSizeInMB,
     });
 
-    user.shortVideoProfile.videoUploads.push(video._id);
-    await user.save();
+    await User.findByIdAndUpdate(userId, { $push: { 'shortVideoProfile.videoUploads': video._id } });
 
-    res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: 'Video uploaded',
-      data: video
+      message: 'Video uploaded successfully',
+      data: video,
     });
+
   } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      data: null
-    });
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
   }
 };
 
 
-exports.deleteVideo = async (req, res) => {
+
+const deleteVideo = async (req, res) => {
   try {
     const videoId = req.params.id;
     const userId = req.user._id;
@@ -90,3 +118,5 @@ exports.deleteVideo = async (req, res) => {
     });
   }
 };
+
+module.exports = { uploadVideo, deleteVideo };

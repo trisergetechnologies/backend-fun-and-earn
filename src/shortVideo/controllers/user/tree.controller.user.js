@@ -32,7 +32,7 @@ async function buildReferralTree(userId) {
 
 
 // Controller function to get the referral tree of a given user
-exports.getTree = async (req, res) => {
+exports.getTeam = async (req, res) => {
   try {
     const userId = req.user._id;
 

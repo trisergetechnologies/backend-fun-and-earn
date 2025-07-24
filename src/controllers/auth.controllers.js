@@ -77,6 +77,19 @@ exports.register = async (req, res) => {
     await Otp.deleteOne({ _id: existingOtp._id });
   }
 
+    // ✅ Validate referral code
+    if (loginApp === 'shortVideo') {
+      const referringUser = await User.findOne({ referralCode });
+
+      if (!referringUser) {
+        return res.status(200).json({
+          success: false,
+          message: 'Invalid referral code',
+          data: null
+        });
+      }
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(password);
     const generatedReferralCode = await generateReferralCode(name);
