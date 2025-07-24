@@ -45,11 +45,11 @@ const uploadVideo = async (req, res) => {
 
     const videoCount = await Video.countDocuments({ userId });
     if (videoCount >= 100) {
-      return res.status(400).json({ success: false, message: 'Upload limit reached (100 videos).' });
+      return res.status(200).json({ success: false, message: 'Upload limit reached (100 videos).' });
     }
 
     if (!durationInSec || Number(durationInSec) > 60) {
-      return res.status(400).json({ success: false, message: 'Invalid video duration' });
+      return res.status(200).json({ success: false, message: 'Invalid video duration' });
     }
 
     const ext = file.originalname.split('.').pop();

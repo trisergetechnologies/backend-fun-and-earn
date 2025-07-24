@@ -24,7 +24,7 @@ const singleVideoUpload = (fieldName) => {
   return (req, res, next) => {
     upload.single(fieldName)(req, res, (err) => {
       if (err) {
-        return res.status(400).json({
+        return res.status(200).json({
           success: false,
           message: 'Video upload failed',
           error: err.message,
@@ -32,7 +32,7 @@ const singleVideoUpload = (fieldName) => {
       }
 
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No video file uploaded" });
+        return res.status(200).json({ success: false, message: "No video file uploaded" });
       }
 
       next();
