@@ -1,7 +1,8 @@
 const https = require('https');
 const User = require("../../../models/User");
 const Video = require("../../models/Video");
-
+const dotenv = require('dotenv');
+dotenv.config();
 
 
 const ACCESS_KEY = process.env.BUNNY_API_KEY;
