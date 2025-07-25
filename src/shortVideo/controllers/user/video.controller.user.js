@@ -66,7 +66,7 @@ const uploadVideo = async (req, res) => {
       return res.status(200).json({ success: false, message: 'Upload limit reached (100 videos).' });
     }
 
-    const duration = await getVideoDurationFromBuffer(buffer);
+    const duration = await getVideoDurationFromBuffer(file.buffer);
     if (duration > MAX_DURATION) {
       return res.status(400).json({ error: `Video too long (${duration}s). Max allowed is ${MAX_DURATION}s.` });
     }
