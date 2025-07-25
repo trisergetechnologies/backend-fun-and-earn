@@ -14,6 +14,7 @@ async function buildReferralTree(referralCode) {
     const childTree = await buildReferralTree(user.referralCode); // recurse using their code
     tree.push({
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
         phone: user.phone,
@@ -51,6 +52,7 @@ exports.getTeam = async (req, res) => {
       message: 'Referral tree fetched successfully',
       data: {
         user: {
+          id: rootUser._id,
           name: rootUser.name,
           email: rootUser.email,
           phone: rootUser.phone,
