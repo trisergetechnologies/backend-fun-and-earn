@@ -23,17 +23,16 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
         // user.wallets.shortVideoWallet = (user.wallets.shortVideoWallet || 0) + amount;
         user.wallets.shortVideoWallet = Number(user.wallets.shortVideoWallet || 0) + amount;
 
-        await Promise.all([
-          new EarningLog({
+          const earningLog = EarningLog({
             userId: user._id,
             type: 'network',
             source: 'purchase',
             earnedFrom: newUser._id,
             amount,
-          }).save(),
+          }).save();
 
-          user.save()
-        ]);
+          earningLog.save();
+          awaituser.save();
       }
     }
   } catch (err) {
