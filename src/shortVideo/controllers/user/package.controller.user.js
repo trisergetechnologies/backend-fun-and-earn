@@ -13,7 +13,9 @@ exports.purchasePackage = async (req, res) => {
     const userId = req.user._id;
     const { packageId } = req.body;
 
-    const user = await User.findById(userId).session(session);
+    const user = await User.findById(userId)
+    .session(session)
+    .populate('package');
     if (!user) throw new Error('User not found');
 
     if (!user.wallets.shortVideoWallet || user.wallets.shortVideoWallet <= 0) {
@@ -21,7 +23,7 @@ exports.purchasePackage = async (req, res) => {
     }
 
     // Check if user already has a package
-    if (user.package) {
+    if (user.package._id == packageId) {
       await session.abortTransaction();
       return res.status(200).json({ success: false, message: 'Package already purchased' });
     }
