@@ -1,4 +1,5 @@
 const Package = require('../../models/Package');
+const User = require('../../models/User');
 const EarningLog = require('../models/EarningLog');
 
 exports.distributeNetworkPurchaseEarnings = async (newUser) => {

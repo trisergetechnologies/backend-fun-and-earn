@@ -67,13 +67,12 @@ exports.purchasePackage = async (req, res) => {
       notes: `Purchased ${selectedPackage.name} package`
     }).save({ session });
 
+    await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
+    await distributeNetworkPurchaseEarnings(user);
+
     // Trigger earnings (non-blocking after commit)
     await session.commitTransaction();
     session.endSession();
-
-    // Now run team and network earnings
-    await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
-    await distributeNetworkPurchaseEarnings(user);
 
     return res.status(200).json({
       success: true,
