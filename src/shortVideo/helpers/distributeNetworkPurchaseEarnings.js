@@ -6,7 +6,8 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
   try {
     const allUsers = await User.find({ serialNumber: { $ne: null } })
       .select('_id serialNumber package wallets')
-      .sort({ serialNumber: 1 });
+      .sort({ serialNumber: 1 })
+      .populate('package');
 
     const buyerSerial = newUser.serialNumber;
     const buyerPackagePrice = newUser.package.price;
