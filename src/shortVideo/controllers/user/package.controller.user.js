@@ -64,7 +64,7 @@ exports.purchasePackage = async (req, res) => {
       assignedSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
       user.serialNumber = assignedSerial;
     }
-    
+
     // Deduct amount
     user.wallets.shortVideoWallet -= selectedPackage.price;
 
@@ -99,7 +99,7 @@ exports.purchasePackage = async (req, res) => {
       success: true,
       message: `${selectedPackage.name} package purchased successfully`,
       data: {
-        serialNumber: nextSerial,
+        serialNumber: user.serialNumber,
         package: selectedPackage.name,
         balance: user.wallets.shortVideoWallet
       }
