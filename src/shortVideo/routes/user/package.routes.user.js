@@ -3,6 +3,6 @@ const { purchasePackage, getPackages } = require('../../controllers/user/package
 const userPackageRouter = express.Router();
 
 userPackageRouter.post('/purchasepackage', purchasePackage);
-userPackageRouter.post('/getpackage', getPackages);
+userPackageRouter.get('/getpackage', getPackages);
 
 module.exports = userPackageRouter;
