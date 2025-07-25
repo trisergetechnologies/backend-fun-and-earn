@@ -1,28 +1,26 @@
 const User = require("../../../models/User");
 
-// Helper function to build the referral tree
-async function buildReferralTree(userId) {
-  // Find all users who were referred by this user
-  const referredUsers = await User.find({ referredBy: userId });
+async function buildReferralTree(referralCode) {
+  // Find all users who were referred using this referral code
+  const referredUsers = await User.find({ referredBy: referralCode });
 
-  // Base case: If no referred users, return an empty array
   if (referredUsers.length === 0) {
     return [];
   }
 
-  // Create an array to store the tree for the current user and their referrals
   const tree = [];
 
-  // For each referred user, build their referral tree recursively
   for (const user of referredUsers) {
-    const childTree = await buildReferralTree(user._id);  // Recursively find the next level of referrals
+    const childTree = await buildReferralTree(user.referralCode); // recurse using their code
     tree.push({
       user: {
-        name: user.name,  // You can include more user fields here if needed
+        name: user.name,
         email: user.email,
         phone: user.phone,
+        referralCode: user.referralCode,
+        referredBy: user.referredBy
       },
-      referrals: childTree  // Recursively add the referrals of this user
+      referrals: childTree
     });
   }
 
@@ -31,33 +29,39 @@ async function buildReferralTree(userId) {
 
 
 
-// Controller function to get the referral tree of a given user
+
 exports.getTeam = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Fetch the root user by ID to start the tree-building process
     const rootUser = await User.findById(userId);
-    
+
     if (!rootUser) {
-      return res.status(200).json({
+      return res.status(404).json({
         success: false,
         message: 'User not found',
         data: null
       });
     }
 
-    // Build the referral tree starting from this user
-    const referralTree = await buildReferralTree(userId);
+    const referralTree = await buildReferralTree(rootUser.referralCode);
 
-    // Send the tree back as the response
     return res.status(200).json({
       success: true,
       message: 'Referral tree fetched successfully',
-      data: referralTree
+      data: {
+        user: {
+          name: rootUser.name,
+          email: rootUser.email,
+          phone: rootUser.phone,
+          referralCode: rootUser.referralCode,
+          referredBy: rootUser.referredBy
+        },
+        referrals: referralTree
+      }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in getTeam:', error);
     return res.status(500).json({
       success: false,
       message: 'An error occurred while fetching the referral tree',
@@ -65,3 +69,4 @@ exports.getTeam = async (req, res) => {
     });
   }
 };
+
