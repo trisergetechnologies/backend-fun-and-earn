@@ -89,7 +89,7 @@ const uploadVideo = async (req, res) => {
       description,
       videoUrl,
       bunnyFilePath: uniqueName,
-      durationInSec: Number(durationInSec),
+      durationInSec: Number(duration),
       sizeInMB: fileSizeInMB,
     });
 
