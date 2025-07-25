@@ -19,6 +19,14 @@ const PackageSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  color: {
+    type: String,
+    default: ''
+  },
+  icon: {
+    type: String,
+    default: ''
+  },
   isActive: {
     type: Boolean,
     default: true

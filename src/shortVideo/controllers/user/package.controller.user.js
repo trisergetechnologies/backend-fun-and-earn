@@ -95,3 +95,20 @@ exports.purchasePackage = async (req, res) => {
     });
   }
 };
+
+
+exports.getPackages = async (req, res) => {
+  try {
+    const packages = await Package.find({ isActive: true }).sort({ price: 1 });
+    res.status(200).json({
+      success: true,
+      data: packages
+    });
+  } catch (error) {
+    console.error('Error fetching packages:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch packages'
+    });
+  }
+};
