@@ -6,6 +6,9 @@ const ffmpeg = require('fluent-ffmpeg');
 const dotenv = require('dotenv');
 dotenv.config();
 
+ffmpeg.setFfprobePath('/usr/bin/ffprobe');
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+
 
 const ACCESS_KEY = process.env.BUNNY_API_KEY;
 const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
