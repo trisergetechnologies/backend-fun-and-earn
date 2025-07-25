@@ -19,7 +19,8 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
       if (Math.abs(user.serialNumber - buyerSerial) <= maxRange && user._id.toString() !== newUser._id.toString()) {
         const amount = 0.01 * buyerPackagePrice;
 
-        user.wallets.shortVideoWallet = (user.wallets.shortVideoWallet || 0) + amount;
+        // user.wallets.shortVideoWallet = (user.wallets.shortVideoWallet || 0) + amount;
+        user.wallets.shortVideoWallet = Number(user.wallets.shortVideoWallet || 0) + amount;
 
         await Promise.all([
           new EarningLog({
