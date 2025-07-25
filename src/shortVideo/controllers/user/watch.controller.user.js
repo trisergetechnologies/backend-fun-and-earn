@@ -4,7 +4,6 @@ const VideoLike = require("../../models/VideoLike");
 const VideoWatchHistory = require("../../models/VideoWatchHistory");
 
 const mongoose = require('mongoose');
-const Video = require('../models/Video');
 
 exports.getFeed = async (req, res) => {
   try {
