@@ -22,10 +22,13 @@ exports.purchasePackage = async (req, res) => {
       throw new Error('Insufficient balance');
     }
 
-    // Check if user already has a package
-    if (user.package._id == packageId) {
+    // If same package already purchased
+    if (user.package && String(user.package._id) === packageId) {
       await session.abortTransaction();
-      return res.status(200).json({ success: false, message: 'Package already purchased' });
+      return res.status(200).json({
+        success: false,
+        message: 'Package already purchased'
+      });
     }
 
     const selectedPackage = await Package.findById(packageId).session(session);
@@ -40,19 +43,34 @@ exports.purchasePackage = async (req, res) => {
     }
 
     // Assign serial number
-    const lastUserWithSerial = await User.findOne({ serialNumber: { $ne: null } })
-      .sort({ serialNumber: -1 })
-      .select('serialNumber')
-      .session(session);
+    // const lastUserWithSerial = await User.findOne({ serialNumber: { $ne: null } })
+    //   .sort({ serialNumber: -1 })
+    //   .select('serialNumber')
+    //   .session(session);
 
-    const nextSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
+    // const nextSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
+    // user.serialNumber = nextSerial;
 
+
+
+    // Assign serial number only if first-time purchase
+    let assignedSerial = user.serialNumber;
+    if (!assignedSerial) {
+      const lastUserWithSerial = await User.findOne({ serialNumber: { $ne: null } })
+        .sort({ serialNumber: -1 })
+        .select('serialNumber')
+        .session(session);
+
+      assignedSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
+      user.serialNumber = assignedSerial;
+    }
+    
     // Deduct amount
     user.wallets.shortVideoWallet -= selectedPackage.price;
 
     // Assign package and serial
     user.package = selectedPackage._id;
-    user.serialNumber = nextSerial;
+    
 
     // Save user
     await user.save({ session });

@@ -2,8 +2,7 @@ const User = require("../../models/User");
 const EarningLog = require("../models/EarningLog");
 const Package = require('../../models/Package');
 
-// Percentage for withdrawal earnings — similar level-wise logic
-const TEAM_WITHDRAWAL_PERCENTAGES = [4, 3, 2.5, 2, 1.5, 1, 0.8, 0.5, 0.4, 0.3]; // % scaled by 0.1 to get actual
+const TEAM_WITHDRAWAL_PERCENTAGES = [8.32, 3.33, 1.66, 1.33, 0.99, 0.99, 0.99, 0.99, 0.66, 0.66];
 
 exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
   try {
@@ -11,15 +10,19 @@ exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
     if (!currentUser) return;
 
     let currentReferral = currentUser.referredBy;
+    let level = 0;
 
-    for (let level = 0; level < 10 && currentReferral; level++) {
-      const referrer = await User.findOne({ referralCode: currentReferral });
+    while (currentReferral && level < 10) {
+      const referrer = await User.findOne({ referralCode: currentReferral }).populate('package');
       if (!referrer || !referrer.package) break;
 
-      const percent = TEAM_WITHDRAWAL_PERCENTAGES[level] / 100;
-      const earning = +(withdrawalAmount * percent).toFixed(2);
+      const maxLevel = referrer.package.name === 'Diamond' ? 10 : 5;
+      if (level >= maxLevel) break;
 
-      referrer.wallets.shortVideoWallet += earning;
+      const percent = TEAM_WITHDRAWAL_PERCENTAGES[level] / 100;
+      const earningAmount = +(withdrawalAmount * percent).toFixed(2);
+
+      referrer.wallets.shortVideoWallet += earningAmount;
 
       await Promise.all([
         new EarningLog({
@@ -28,15 +31,14 @@ exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
           source: 'withdrawal',
           level: level + 1,
           earnedFrom: userId,
-          amount: earning
+          amount: earningAmount
         }).save(),
-
-
 
         referrer.save()
       ]);
 
       currentReferral = referrer.referredBy;
+      level++;
     }
   } catch (err) {
     console.error('Error in distributeTeamWithdrawalEarnings:', err);

@@ -19,7 +19,8 @@ async function buildReferralTree(referralCode) {
         email: user.email,
         phone: user.phone,
         referralCode: user.referralCode,
-        referredBy: user.referredBy
+        referredBy: user.referredBy,
+        package: user.package
       },
       referrals: childTree
     });
