@@ -1,6 +1,8 @@
 const https = require('https');
 const User = require("../../../models/User");
 const Video = require("../../models/Video");
+const streamifier = require('streamifier');
+const ffmpeg = require('fluent-ffmpeg');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -10,6 +12,18 @@ const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
 const HOSTNAME = process.env.BUNNY_HOSTNAME;
 const CDN_BASE_URL = process.env.BUNNY_CDN_BASE_URL;
 
+
+function getVideoDurationFromBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    const stream = streamifier.createReadStream(buffer);
+
+    ffmpeg(stream)
+      .ffprobe((err, metadata) => {
+        if (err) return reject(err);
+        resolve(metadata.format.duration);
+      });
+  });
+}
 
 
 const uploadBufferToBunny = (buffer, remotePath) => {
@@ -41,17 +55,20 @@ const uploadBufferToBunny = (buffer, remotePath) => {
 
 const uploadVideo = async (req, res) => {
   try {
-    const { title = '', description = '', durationInSec } = req.body;
+    const { title = '', description = '' } = req.body;
     const { file, user } = req;
     const userId = user._id;
+    const MAX_DURATION = 60;
+
 
     const videoCount = await Video.countDocuments({ userId });
     if (videoCount >= 100) {
       return res.status(200).json({ success: false, message: 'Upload limit reached (100 videos).' });
     }
 
-    if (!durationInSec || Number(durationInSec) > 60) {
-      return res.status(200).json({ success: false, message: 'Invalid video duration' });
+    const duration = await getVideoDurationFromBuffer(buffer);
+    if (duration > MAX_DURATION) {
+      return res.status(400).json({ error: `Video too long (${duration}s). Max allowed is ${MAX_DURATION}s.` });
     }
 
     const ext = file.originalname.split('.').pop();
