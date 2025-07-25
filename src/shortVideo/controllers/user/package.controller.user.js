@@ -3,6 +3,7 @@ const User = require('../../../models/User');
 const Package = require('../../../models/Package');
 const { distributeTeamPurchaseEarnings } = require('../../helpers/distributeTeamPurchaseEarnings');
 const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeNetworkPurchaseEarnings');
+const WalletTransaction = require('../../../models/WalletTransaction');
 
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
