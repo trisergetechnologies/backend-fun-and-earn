@@ -3,25 +3,48 @@ const Video = require("../../models/Video");
 const VideoLike = require("../../models/VideoLike");
 const VideoWatchHistory = require("../../models/VideoWatchHistory");
 
+const mongoose = require('mongoose');
+const Video = require('../models/Video');
+
 exports.getFeed = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
-    const skip = (page - 1) * limit;
 
-    // Fetch videos with pagination, sorted by creation date
-    const videos = await Video.find({ isActive: true })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('userId', 'name') // only get username
-      .lean();
+    // Step 1: Get total count of active videos
+    const total = await Video.countDocuments({ isActive: true });
+
+    // Step 2: Use aggregation to get random paginated results
+    const videos = await Video.aggregate([
+      { $match: { isActive: true } },
+      { $sample: { size: total } }, // Randomize
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'userInfo',
+        },
+      },
+      { $unwind: '$userInfo' },
+      {
+        $project: {
+          videoUrl: 1,
+          title: 1,
+          likes: 1,
+          createdAt: 1,
+          user: '$userInfo.name',
+        },
+      },
+    ]);
 
     const formattedVideos = videos.map((video) => ({
       id: video._id,
       videoUrl: video.videoUrl,
       title: video.title,
-      user: video.userId.name,
+      user: video.user,
       likes: video.likes,
       comments: 0,
     }));
