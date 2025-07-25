@@ -7,25 +7,32 @@ exports.getFeed = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
+    const skip = (page - 1) * limit;
+
+    // Fetch videos with pagination, sorted by creation date
     const videos = await Video.find({ isActive: true })
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+      .skip(skip)
+      .limit(limit)
+      .populate('userId', 'name') // only get username
+      .lean();
 
-    res.status(200).json({
-      success: true,
-      message: 'Feed fetched successfully',
-      data: videos
-    });
+    const formattedVideos = videos.map((video) => ({
+      id: video._id,
+      videoUrl: video.videoUrl,
+      title: video.title,
+      user: video.userId.name,
+      likes: video.likes,
+      comments: 0,
+    }));
+
+    return res.status(200).json({ success: true, data: formattedVideos });
   } catch (err) {
-    console.error('Feed error:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      data: null
-    });
+    console.error('Error fetching reel feed:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
 
 
 exports.logWatchTime = async (req, res) => {
