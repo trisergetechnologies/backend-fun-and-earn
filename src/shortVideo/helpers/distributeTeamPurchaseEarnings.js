@@ -27,10 +27,8 @@ exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
       await Promise.all([
         new EarningLog({
           userId: referrer._id,
-          type: 'team',
-          source: 'purchase',
-          level: level + 1,
-          earnedFrom: userId,
+          source: 'teamPurchase',
+          fromUser: userId,
           amount: earningAmount
         }).save(),
 

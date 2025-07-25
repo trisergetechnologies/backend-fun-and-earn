@@ -20,14 +20,12 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
       if (Math.abs(user.serialNumber - buyerSerial) <= maxRange && user._id.toString() !== newUser._id.toString()) {
         const amount = 0.01 * buyerPackagePrice;
 
-        // user.wallets.shortVideoWallet = (user.wallets.shortVideoWallet || 0) + amount;
         user.wallets.shortVideoWallet = Number(user.wallets.shortVideoWallet || 0) + amount;
 
           const earningLog = EarningLog({
             userId: user._id,
-            type: 'network',
-            source: 'purchase',
-            earnedFrom: newUser._id,
+            source: 'networkPurchase',
+            fromUser: newUser._id,
             amount,
           }).save();
 
