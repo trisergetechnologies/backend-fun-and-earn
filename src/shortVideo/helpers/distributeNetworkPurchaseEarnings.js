@@ -40,18 +40,15 @@ const EarningLog = require('../models/EarningLog');
 
 exports.distributeNetworkPurchaseEarnings = async (newUser) => {
   try {
-
-    console.log("came into dis.in.Netwo...new User came",newUser);
-
     const allUsers = await User.find({ serialNumber: { $ne: null } })
       .select('_id serialNumber package wallets')
       .sort({ serialNumber: 1 })
       .populate('package');
 
     const buyerSerial = newUser.serialNumber;
+    await newUser.populate('package');
     const buyerPackagePrice = newUser.package.price;
-    console.log("wo bande jinme package check krna h",allUsers[0]);
-    console.log("buyerPackagePrice", newUser.package.price);
+    console.log("buyerPackagePrice", buyerPackagePrice);
 
     for (const user of allUsers) {
       if (!user.package || user._id.equals(newUser._id)) continue;
