@@ -2,7 +2,7 @@ const User = require('../../models/User');
 const EarningLog = require('../models/EarningLog');
 const Package = require('../../models/Package');
 
-const TEAM_PURCHASE_PERCENTAGES = [25, 10, 5, 4, 3, 3, 3, 3, 2, 2]; // Level 1 to 10
+const TEAM_PURCHASE_PERCENTAGES = [25, 10, 5, 4, 3, 3, 3, 3, 2, 2];
 
 exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
   try {
@@ -28,12 +28,10 @@ exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
 
         await Promise.all([
           new EarningLog({
-            userId: referrer._id,
-            type: 'team',
-            source: 'purchase',
-            level: level + 1,
-            earnedFrom: userId,
-            amount: earningAmount
+          userId: referrer._id,
+          source: 'teamPurchase',
+          fromUser: userId,
+          amount: earningAmount
           }).save(),
 
           referrer.save()
