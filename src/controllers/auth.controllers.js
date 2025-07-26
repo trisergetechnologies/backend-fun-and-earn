@@ -222,8 +222,8 @@ exports.login = async (req, res) => {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER || 'sdwivedi856@gmail.com',
-    pass: process.env.EMAIL_PASS || 'hjtygmlxiedgvmjt'
+    user: process.env.EMAIL_USER || 'ampdreammart@gmail.com',
+    pass: process.env.EMAIL_PASS || 'rvymbfbctghhdlct'
   }
 });
 
@@ -242,9 +242,9 @@ exports.sendOtp = async (req, res) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
 
   const mailOptions = {
-    from: process.env.EMAIL_USER || 'sdwivedi856@gmail.com',
+    from: process.env.EMAIL_USER_TO_SHOW,
     to: email,
-    subject: 'Your OTP Code',
+    subject: 'Your OTP Code From Aarush MP Team',
     text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
   };
 
