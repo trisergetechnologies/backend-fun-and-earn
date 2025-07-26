@@ -39,7 +39,7 @@ exports.eCartActivate = async (req, res) => {
                 });
             }
             // Optionally delete OTP after successful validation
-            await Otp.deleteMany({ email });
+            await Otp.deleteMany({ email: user.email });
             await Otp.deleteOne({ _id: existingOtp._id });
 
         user.applications.push('eCart');
