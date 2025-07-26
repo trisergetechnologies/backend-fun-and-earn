@@ -14,7 +14,7 @@ exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
 
     while (currentReferral && level < 10) {
       const referrer = await User.findOne({ referralCode: currentReferral }).populate('package');
-      if (!referrer || !referrer.package) continue;
+      if (!referrer || !referrer.package) break;
 
       const maxLevel = referrer.package.name === 'Diamond' ? 10 : 5;
       if (level >= maxLevel) break;
