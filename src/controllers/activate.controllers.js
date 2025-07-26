@@ -29,7 +29,7 @@ exports.eCartActivate = async (req, res) => {
                 return res.status(200).json({ success: false, message: 'OTP is required for eCart registration', data: null });
             }
 
-            const existingOtp = await Otp.findOne({ email, otp });
+            const existingOtp = await Otp.findOne({ email: user.email, otp });
 
             if (!existingOtp) {
                 return res.status(200).json({
