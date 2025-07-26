@@ -42,17 +42,6 @@ exports.purchasePackage = async (req, res) => {
       return res.status(200).json({ success: false, message: 'Insufficient wallet balance' });
     }
 
-    // Assign serial number
-    // const lastUserWithSerial = await User.findOne({ serialNumber: { $ne: null } })
-    //   .sort({ serialNumber: -1 })
-    //   .select('serialNumber')
-    //   .session(session);
-
-    // const nextSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
-    // user.serialNumber = nextSerial;
-
-
-
     // Assign serial number only if first-time purchase
     let assignedSerial = user.serialNumber;
     if (!assignedSerial) {
@@ -120,10 +109,37 @@ exports.purchasePackage = async (req, res) => {
 
 exports.getPackages = async (req, res) => {
   try {
-    const packages = await Package.find({ isActive: true }).sort({ price: 1 });
+    const userId = req.user?._id; // Assuming you have authentication middleware
+    const allPackages = await Package.find({ isActive: true }).sort({ price: 1 });
+
+    let currentPackage = null;
+    let availablePackages = [];
+
+    if (userId) {
+      const user = await User.findById(userId).populate('package');
+      currentPackage = user?.package || null;
+
+      if (!currentPackage) {
+        // User hasn't purchased any package
+        availablePackages = allPackages;
+      } else if (currentPackage.name === 'Gold') {
+        // User has Gold, only allow Diamond
+        availablePackages = allPackages.filter(pkg => pkg.name === 'Diamond');
+      } else if (currentPackage.name === 'Diamond') {
+        // User has Diamond, no further upgrade
+        availablePackages = [];
+      }
+    } else {
+      // If not logged in, show all active packages (optional)
+      availablePackages = allPackages;
+    }
+
     res.status(200).json({
       success: true,
-      data: packages
+      data: {
+        currentPackage,
+        availablePackages
+      }
     });
   } catch (error) {
     console.error('Error fetching packages:', error);
@@ -133,3 +149,4 @@ exports.getPackages = async (req, res) => {
     });
   }
 };
+
