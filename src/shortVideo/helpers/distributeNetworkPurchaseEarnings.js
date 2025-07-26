@@ -50,6 +50,8 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
 
     const buyerSerial = newUser.serialNumber;
     const buyerPackagePrice = newUser.package.price;
+    console.log("wo bande jinme package check krna h",allUsers[0]);
+    console.log("buyerPackagePrice", newUser.package.price);
 
     for (const user of allUsers) {
       if (!user.package || user._id.equals(newUser._id)) continue;
