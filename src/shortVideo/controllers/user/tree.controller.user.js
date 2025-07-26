@@ -1,5 +1,6 @@
 const User = require("../../../models/User");
 const Package = require("../../../models/Package");
+const EarningLog = require("../../models/EarningLog");
 
 async function buildReferralTree(referralCode) {
   // Find all users who were referred using this referral code
@@ -133,6 +134,29 @@ exports.getNetwork = async (req, res) => {
       success: false,
       message: 'Internal server error',
       data: null,
+    });
+  }
+};
+
+
+exports.getEarnings = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const earnings = await EarningLog.find({ userId })
+      .sort({ createdAt: -1 })
+      .populate("fromUser", "name")
+      .lean();
+
+    res.json({
+      success: true,
+      data: earnings,
+    });
+  } catch (err) {
+    console.error("Error in getEarnings:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch earnings",
     });
   }
 };
