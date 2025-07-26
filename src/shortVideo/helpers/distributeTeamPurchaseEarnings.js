@@ -17,6 +17,8 @@ exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
       if (!referrer || !referrer.package) break;
 
       const maxLevel = referrer.package.name === 'Diamond' ? 10 : 5;
+      console.log("checking if undefined",referrer.package.name);
+      console.log("what's the max level", maxLevel);
       if (level >= maxLevel) break;
 
       const percent = TEAM_PURCHASE_PERCENTAGES[level];
