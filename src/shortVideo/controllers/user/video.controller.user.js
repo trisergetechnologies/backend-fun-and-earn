@@ -4,6 +4,7 @@ const User = require("../../../models/User");
 const Video = require("../../models/Video");
 const streamifier = require('streamifier');
 const ffmpeg = require('fluent-ffmpeg');
+const { Readable } = require('stream');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -26,15 +27,15 @@ function getVideoDurationFromBuffer(buffer) {
   });
 }
 
+
 const uploadToBunnyStream = async (buffer, title = "Untitled Video") => {
   const form = new FormData();
-
-  const stream = streamifier.createReadStream(buffer);
-
+  
+  const stream = Readable.from(buffer); // Convert buffer to stream
   form.append('file', stream, {
     filename: `${Date.now()}.mp4`,
-    contentType: 'video/mp4',
-    knownLength: buffer.length,
+    contentType: 'video/mp4', // Required
+    knownLength: buffer.length, // Very important for some APIs
   });
 
   form.append('title', title);
