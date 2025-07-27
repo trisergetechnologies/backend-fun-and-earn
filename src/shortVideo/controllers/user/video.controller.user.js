@@ -1,4 +1,5 @@
-const https = require('https');
+const axios = require('axios');
+const FormData = require('form-data');
 const User = require("../../../models/User");
 const Video = require("../../models/Video");
 const streamifier = require('streamifier');
@@ -10,10 +11,10 @@ ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 
 
-const ACCESS_KEY = process.env.BUNNY_API_KEY;
-const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
-const HOSTNAME = process.env.BUNNY_HOSTNAME;
-const CDN_BASE_URL = process.env.BUNNY_CDN_BASE_URL;
+// const ACCESS_KEY = process.env.BUNNY_API_KEY;
+// const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
+// const HOSTNAME = process.env.BUNNY_HOSTNAME;
+// const CDN_BASE_URL = process.env.BUNNY_CDN_BASE_URL;
 
 
 // function getVideoDurationFromBuffer(buffer) {
