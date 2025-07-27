@@ -61,8 +61,9 @@ exports.getFeed = async (req, res) => {
 exports.logWatchTime = async (req, res) => {
   try {
     const { videoId, watchedDuration } = req.body;
-    const userId = req.user._id;
-
+    const { user } = req;
+    const userId = user._id;
+    console.log("videoId", videoId, "watch dur:  ", watchedDuration);
     if (!videoId || !watchedDuration || watchedDuration <= 0 || watchedDuration > 60) {
       return res.status(200).json({
         success: false,
@@ -85,15 +86,13 @@ exports.logWatchTime = async (req, res) => {
         rewarded: true
       });
     }
+    console.log("time before: ", user.shortVideoProfile.watchTime);
+    const newWatchTime = user.shortVideoProfile.watchTime + watchedDuration;
 
-    // Update user's wallet and total watch time
-    await User.findByIdAndUpdate(userId, {
-      $inc: {
-        'wallets.shortVideoWallet': watchedDuration,
-        'shortVideoProfile.watchTime': watchedDuration
-      }
-    });
+    user.shortVideoProfile.watchTime = newWatchTime;
 
+    await user.save();
+    console.log("time after: ", user.shortVideoProfile.watchTime);
     res.status(200).json({
       success: true,
       message: `Added ${watchedDuration} points`,
