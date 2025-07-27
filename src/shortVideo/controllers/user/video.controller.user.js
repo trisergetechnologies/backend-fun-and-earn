@@ -49,10 +49,12 @@ const createBunnyVideo = async (title) => {
       },
     }
   );
+  console.log("data from create bunny video", data);
   return response.data; // Contains uploadUrl, guid, videoId
 };
 
 const uploadRawToBunny = async (uploadUrl, buffer) => {
+  console.log("uploadUrl in upload raw to bunny", uploadUrl);
   const response = await axios.put(uploadUrl, buffer, {
     headers: {
       'Content-Type': 'application/octet-stream',
@@ -65,6 +67,7 @@ const uploadRawToBunny = async (uploadUrl, buffer) => {
 
 const uploadToBunnyStream = async (buffer, title) => {
   const videoMeta = await createBunnyVideo(title);
+  console.log("video meta data from upload to bunny stream", videoMeta);
   await uploadRawToBunny(videoMeta.uploadUrl, buffer);
 
   return {
