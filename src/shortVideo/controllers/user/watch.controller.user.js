@@ -70,7 +70,7 @@ exports.logWatchTime = async (req, res) => {
         data: null
       });
     }
-
+    watchedDuration = Math.floor(Number(watchedDuration));
     // Check if the user already has a watch history for this video
     const existingHistory = await VideoWatchHistory.findOne({ userId, videoId });
 
