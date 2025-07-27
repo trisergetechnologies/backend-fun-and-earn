@@ -17,6 +17,17 @@ ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 const BUNNY_STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY;
 const BUNNY_STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID;
 
+// function getVideoDurationFromBuffer(buffer) {
+//   return new Promise((resolve, reject) => {
+//     const stream = streamifier.createReadStream(buffer);
+//     ffmpeg(stream).ffprobe((err, metadata) => {
+//       if (err) return reject(err);
+//       resolve(metadata.format.duration);
+//     });
+//   });
+// }
+
+
 function getVideoDurationFromBuffer(buffer) {
   return new Promise((resolve, reject) => {
     const stream = streamifier.createReadStream(buffer);
@@ -27,32 +38,39 @@ function getVideoDurationFromBuffer(buffer) {
   });
 }
 
-
-const uploadToBunnyStream = async (buffer, title = "Untitled Video") => {
-  const form = new FormData();
-  
-  const stream = Readable.from(buffer); // Convert buffer to stream
-  form.append('file', stream, {
-    filename: `${Date.now()}.mp4`,
-    contentType: 'video/mp4', // Required
-    knownLength: buffer.length, // Very important for some APIs
-  });
-
-  form.append('title', title);
-
-  const res = await axios.post(
+const createBunnyVideo = async (title) => {
+  const response = await axios.post(
     `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos`,
-    form,
+    { title },
     {
       headers: {
-        ...form.getHeaders(),
         AccessKey: BUNNY_STREAM_API_KEY,
+        'Content-Type': 'application/json',
       },
-      maxBodyLength: Infinity,
     }
   );
+  return response.data; // Contains uploadUrl, guid, videoId
+};
 
-  return res.data;
+const uploadRawToBunny = async (uploadUrl, buffer) => {
+  const response = await axios.put(uploadUrl, buffer, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+    },
+    maxBodyLength: Infinity,
+  });
+
+  if (response.status !== 200) throw new Error('Upload to Bunny Stream failed');
+};
+
+const uploadToBunnyStream = async (buffer, title) => {
+  const videoMeta = await createBunnyVideo(title);
+  await uploadRawToBunny(videoMeta.uploadUrl, buffer);
+
+  return {
+    videoId: videoMeta.videoId,
+    guid: videoMeta.guid,
+  };
 };
 
 const uploadVideo = async (req, res) => {
@@ -74,11 +92,10 @@ const uploadVideo = async (req, res) => {
 
     const fileSizeInMB = +(file.size / (1024 * 1024)).toFixed(2);
 
-    // Upload to Bunny Stream
+    // Bunny 2-step upload
     const bunnyRes = await uploadToBunnyStream(file.buffer, title);
-
-    const videoUrl = `https://video.bunnycdn.com/play/${bunnyRes.guid}`; // HLS URL
-    const bunnyFilePath = bunnyRes.guid; // Store video ID as bunnyFilePath for deletion reference
+    const videoUrl = `https://video.bunnycdn.com/play/${bunnyRes.guid}`;
+    const bunnyFilePath = bunnyRes.guid;
 
     const video = await Video.create({
       userId,
@@ -91,7 +108,7 @@ const uploadVideo = async (req, res) => {
     });
 
     await User.findByIdAndUpdate(userId, {
-      $push: { 'shortVideoProfile.videoUploads': video._id }
+      $push: { 'shortVideoProfile.videoUploads': video._id },
     });
 
     return res.status(201).json({
@@ -101,11 +118,11 @@ const uploadVideo = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error('Video upload failed:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: err.message
+      error: err.message,
     });
   }
 };
