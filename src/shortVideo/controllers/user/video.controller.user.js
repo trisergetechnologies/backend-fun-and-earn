@@ -58,6 +58,7 @@ const uploadRawToBunny = async (uploadUrl, buffer) => {
   const response = await axios.put(uploadUrl, buffer, {
     headers: {
       'Content-Type': 'application/octet-stream',
+      AccessKey: BUNNY_STREAM_API_KEY,
     },
     maxBodyLength: Infinity,
   });
@@ -68,7 +69,9 @@ const uploadRawToBunny = async (uploadUrl, buffer) => {
 const uploadToBunnyStream = async (buffer, title) => {
   const videoMeta = await createBunnyVideo(title);
   console.log("video meta data from upload to bunny stream", videoMeta);
-  await uploadRawToBunny(videoMeta.uploadUrl, buffer);
+  
+  const uploadUrl = `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos/${videoMeta.guid}`
+  await uploadRawToBunny(uploadUrl, buffer);
 
   return {
     videoId: videoMeta.videoId,
