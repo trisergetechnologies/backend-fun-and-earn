@@ -40,7 +40,7 @@ function getVideoDurationFromBuffer(buffer) {
 
 const createBunnyVideo = async (title) => {
   const response = await axios.post(
-    `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos`,
+    `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos?includeUploadUrl=true`,
     { title },
     {
       headers: {
