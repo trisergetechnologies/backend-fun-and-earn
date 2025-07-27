@@ -11,6 +11,104 @@ ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 
 
+
+
+const BUNNY_STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY;
+const BUNNY_STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID;
+
+function getVideoDurationFromBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    const stream = streamifier.createReadStream(buffer);
+    ffmpeg(stream).ffprobe((err, metadata) => {
+      if (err) return reject(err);
+      resolve(metadata.format.duration);
+    });
+  });
+}
+
+const uploadToBunnyStream = async (buffer, title = "Untitled Video") => {
+  const form = new FormData();
+
+  const stream = streamifier.createReadStream(buffer);
+
+  form.append('file', stream, {
+    filename: `${Date.now()}.mp4`,
+    contentType: 'video/mp4',
+    knownLength: buffer.length,
+  });
+
+  form.append('title', title);
+
+  const res = await axios.post(
+    `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos`,
+    form,
+    {
+      headers: {
+        ...form.getHeaders(),
+        AccessKey: BUNNY_STREAM_API_KEY,
+      },
+      maxBodyLength: Infinity,
+    }
+  );
+
+  return res.data;
+};
+
+const uploadVideo = async (req, res) => {
+  try {
+    const { title = '', description = '' } = req.body;
+    const { file, user } = req;
+    const userId = user._id;
+    const MAX_DURATION = 60;
+
+    const videoCount = await Video.countDocuments({ userId });
+    if (videoCount >= 100) {
+      return res.status(200).json({ success: false, message: 'Upload limit reached (100 videos).' });
+    }
+
+    const duration = await getVideoDurationFromBuffer(file.buffer);
+    if (duration > MAX_DURATION) {
+      return res.status(400).json({ error: `Video too long (${duration}s). Max allowed is ${MAX_DURATION}s.` });
+    }
+
+    const fileSizeInMB = +(file.size / (1024 * 1024)).toFixed(2);
+
+    // Upload to Bunny Stream
+    const bunnyRes = await uploadToBunnyStream(file.buffer, title);
+
+    const videoUrl = `https://video.bunnycdn.com/play/${bunnyRes.guid}`; // HLS URL
+    const bunnyFilePath = bunnyRes.guid; // Store video ID as bunnyFilePath for deletion reference
+
+    const video = await Video.create({
+      userId,
+      title,
+      description,
+      videoUrl,
+      bunnyFilePath,
+      durationInSec: Number(duration),
+      sizeInMB: fileSizeInMB,
+    });
+
+    await User.findByIdAndUpdate(userId, {
+      $push: { 'shortVideoProfile.videoUploads': video._id }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Video uploaded successfully',
+      data: video,
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: err.message
+    });
+  }
+};
+
 // const ACCESS_KEY = process.env.BUNNY_API_KEY;
 // const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE;
 // const HOSTNAME = process.env.BUNNY_HOSTNAME;
@@ -107,99 +205,6 @@ ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 //     return res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
 //   }
 // };
-
-const BUNNY_STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY;
-const BUNNY_STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID;
-
-function getVideoDurationFromBuffer(buffer) {
-  return new Promise((resolve, reject) => {
-    const stream = streamifier.createReadStream(buffer);
-    ffmpeg(stream).ffprobe((err, metadata) => {
-      if (err) return reject(err);
-      resolve(metadata.format.duration);
-    });
-  });
-}
-
-const uploadToBunnyStream = async (buffer, title = "Untitled Video") => {
-  const form = new FormData();
-  form.append('file', buffer, {
-    filename: `${Date.now()}.mp4`,
-    contentType: 'video/mp4',
-  });
-  form.append('title', title);
-
-  const res = await axios.post(
-    `https://video.bunnycdn.com/library/${BUNNY_STREAM_LIBRARY_ID}/videos`,
-    form,
-    {
-      headers: {
-        ...form.getHeaders(),
-        AccessKey: BUNNY_STREAM_API_KEY,
-      },
-      maxBodyLength: Infinity,
-    }
-  );
-
-  return res.data; // Contains videoId, status, etc.
-};
-
-const uploadVideo = async (req, res) => {
-  try {
-    const { title = '', description = '' } = req.body;
-    const { file, user } = req;
-    const userId = user._id;
-    const MAX_DURATION = 60;
-
-    const videoCount = await Video.countDocuments({ userId });
-    if (videoCount >= 100) {
-      return res.status(200).json({ success: false, message: 'Upload limit reached (100 videos).' });
-    }
-
-    const duration = await getVideoDurationFromBuffer(file.buffer);
-    if (duration > MAX_DURATION) {
-      return res.status(400).json({ error: `Video too long (${duration}s). Max allowed is ${MAX_DURATION}s.` });
-    }
-
-    const fileSizeInMB = +(file.size / (1024 * 1024)).toFixed(2);
-
-    // Upload to Bunny Stream
-    const bunnyRes = await uploadToBunnyStream(file.buffer, title);
-
-    const videoUrl = `https://video.bunnycdn.com/play/${bunnyRes.guid}`; // HLS URL
-    const bunnyFilePath = bunnyRes.guid; // Store video ID as bunnyFilePath for deletion reference
-
-    const video = await Video.create({
-      userId,
-      title,
-      description,
-      videoUrl,
-      bunnyFilePath,
-      durationInSec: Number(duration),
-      sizeInMB: fileSizeInMB,
-    });
-
-    await User.findByIdAndUpdate(userId, {
-      $push: { 'shortVideoProfile.videoUploads': video._id }
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: 'Video uploaded successfully',
-      data: video,
-    });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: err.message
-    });
-  }
-};
-
-
 
 const deleteVideo = async (req, res) => {
   try {
