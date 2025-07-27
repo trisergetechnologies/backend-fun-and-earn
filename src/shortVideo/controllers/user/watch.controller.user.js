@@ -63,41 +63,47 @@ exports.logWatchTime = async (req, res) => {
     const { videoId, watchedDuration } = req.body;
     const { user } = req;
     const userId = user._id;
-    console.log("videoId", videoId, "watch dur:  ", watchedDuration);
-    if (!videoId || !watchedDuration || watchedDuration <= 0 || watchedDuration > 60) {
+
+    // Safely process watchedDuration into an integer
+    const duration = Math.floor(Number(watchedDuration));
+
+    console.log("videoId", videoId, "watch dur:  ", duration);
+
+    if (!videoId || isNaN(duration) || duration <= 0 || duration > 60) {
       return res.status(200).json({
         success: false,
         message: 'Invalid data',
         data: null
       });
     }
-    watchedDuration = Math.floor(Number(watchedDuration));
+
     // Check if the user already has a watch history for this video
     const existingHistory = await VideoWatchHistory.findOne({ userId, videoId });
 
     if (existingHistory) {
-      existingHistory.watchedDuration += watchedDuration;
+      existingHistory.watchedDuration += duration;
       await existingHistory.save();
     } else {
       await VideoWatchHistory.create({
         userId,
         videoId,
-        watchedDuration,
+        watchedDuration: duration,
         rewarded: true
       });
     }
+
     console.log("time before: ", user.shortVideoProfile.watchTime);
-    const newWatchTime = user.shortVideoProfile.watchTime + watchedDuration;
-
+    const newWatchTime = user.shortVideoProfile.watchTime + duration;
     user.shortVideoProfile.watchTime = newWatchTime;
-
     await user.save();
     console.log("time after: ", user.shortVideoProfile.watchTime);
+
     res.status(200).json({
       success: true,
-      message: `Added ${watchedDuration} points`,
-      data: { points: watchedDuration }
+      message: `Added ${duration} points`,
+      data: { points: duration }
     });
+
   } catch (err) {
     console.error('Watch error:', err);
     res.status(500).json({
@@ -107,6 +113,7 @@ exports.logWatchTime = async (req, res) => {
     });
   }
 };
+
 
 
 exports.toggleLike = async (req, res) => {
