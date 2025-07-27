@@ -49,7 +49,7 @@ const createBunnyVideo = async (title) => {
       },
     }
   );
-  console.log("data from create bunny video", data);
+  console.log("data from create bunny video", response.data);
   return response.data; // Contains uploadUrl, guid, videoId
 };
 
