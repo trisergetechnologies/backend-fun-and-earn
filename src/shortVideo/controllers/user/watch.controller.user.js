@@ -33,6 +33,7 @@ exports.getFeed = async (req, res) => {
           videoUrl: 1,
           title: 1,
           likes: 1,
+          bunnyFilePath: 1,
           createdAt: 1,
           user: '$userInfo.name',
         },
@@ -41,7 +42,7 @@ exports.getFeed = async (req, res) => {
 
     const formattedVideos = videos.map((video) => ({
       id: video._id,
-      videoUrl: video.videoUrl,
+      videoUrl: `https://vz-f8479119-66c.b-cdn.net/${video.bunnyFilePath}/playlist.m3u8`,
       title: video.title,
       user: video.user,
       likes: video.likes,
