@@ -42,6 +42,17 @@ exports.register = async (req, res) => {
       return res.status(200).json({ success: false, message: 'OTP is required for eCart registration', data: null });
     }
 
+    if (loginApp === 'shortVideo' && referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (!referrer || !referrer.applications.includes('shortVideo') || !referrer.package) {
+        return res.status(200).json({
+          success: false,
+          message: 'Invalid referral code | Not a valid referrer !',
+          data: null
+        });
+      }
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email });
 
@@ -57,25 +68,25 @@ exports.register = async (req, res) => {
       }
     }
 
-  // ✅ Verify OTP for eCart
-  if (loginApp === 'eCart') {
-    if(!otp){
-      return res.status(200).json({ success: false, message: 'OTP is required for eCart registration', data: null });
-    }
-    const existingOtp = await Otp.findOne({ email, otp });
-    
-    if (!existingOtp) {
-      return res.status(200).json({
-        success: false,
-        message: 'Invalid or expired OTP',
-        data: null
-      });
-    }
+    // ✅ Verify OTP for eCart
+    if (loginApp === 'eCart') {
+      if (!otp) {
+        return res.status(200).json({ success: false, message: 'OTP is required for eCart registration', data: null });
+      }
+      const existingOtp = await Otp.findOne({ email, otp });
 
-    // Optionally delete OTP after successful validation
-    await Otp.deleteMany({email});
-    await Otp.deleteOne({ _id: existingOtp._id });
-  }
+      if (!existingOtp) {
+        return res.status(200).json({
+          success: false,
+          message: 'Invalid or expired OTP',
+          data: null
+        });
+      }
+
+      // Optionally delete OTP after successful validation
+      await Otp.deleteMany({ email });
+      await Otp.deleteOne({ _id: existingOtp._id });
+    }
 
     // ✅ Validate referral code
     if (loginApp === 'shortVideo') {

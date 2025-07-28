@@ -94,10 +94,10 @@ exports.shortVideoActivate = async (req, res) => {
     // ✅ Validate referral code belongs to an active shortVideo user
     const referrer = await User.findOne({ referralCode });
 
-    if (!referrer || !referrer.applications.includes('shortVideo')) {
+    if (!referrer || !referrer.applications.includes('shortVideo') || !referrer.package) {
       return res.status(200).json({
         success: false,
-        message: 'Invalid referral code — must belong to a Short Video user',
+        message: 'Invalid referral code | Not a valid referrer !',
         data: null
       });
     }
