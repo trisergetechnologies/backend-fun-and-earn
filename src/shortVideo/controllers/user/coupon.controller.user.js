@@ -29,7 +29,7 @@ exports.redeemCoupon = async (req, res) => {
     await WalletTransaction.create({
       userId,
       type: 'earn',
-      source: 'eCart',
+      source: 'coupon',
       fromWallet: 'reward',
       toWallet: 'shortVideoWallet',
       amount: coupon.value,
