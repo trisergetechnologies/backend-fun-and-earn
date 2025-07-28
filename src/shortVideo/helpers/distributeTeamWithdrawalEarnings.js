@@ -6,37 +6,41 @@ const TEAM_WITHDRAWAL_PERCENTAGES = [8.32, 3.33, 1.66, 1.33, 0.99, 0.99, 0.99, 0
 
 exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
   try {
-    let currentUser = await User.findById(userId);
+    // Get current user with package populated
+    const currentUser = await User.findById(userId).populate('package');
     if (!currentUser) return;
 
     let currentReferral = currentUser.referredBy;
     let level = 0;
 
+    // Traverse up to 10 levels in referral chain
     while (currentReferral && level < 10) {
       const referrer = await User.findOne({ referralCode: currentReferral }).populate('package');
       if (!referrer || !referrer.package) break;
 
-      const maxLevel = referrer.package.name === 'Diamond' ? 10 : 5;
-      if (level >= maxLevel) break;
+      const maxEarningLevel = referrer.package.name === 'Diamond' ? 10 : 5;
 
-      const percent = TEAM_WITHDRAWAL_PERCENTAGES[level] / 100;
-      const earningAmount = +(withdrawalAmount * percent).toFixed(2);
+      if (level < maxEarningLevel) {
+        const percent = TEAM_WITHDRAWAL_PERCENTAGES[level];
+        const earningAmount = +(withdrawalAmount * (percent / 100)).toFixed(2);
 
-      referrer.wallets.shortVideoWallet += earningAmount;
+        // Add earnings to wallet
+        referrer.wallets.shortVideoWallet += earningAmount;
 
-      await Promise.all([
-        new EarningLog({
+        // Save earning log and update referrer wallet simultaneously
+        await Promise.all([
+          new EarningLog({
           userId: referrer._id,
-          type: 'team',
-          source: 'withdrawal',
-          level: level + 1,
-          earnedFrom: userId,
+          source: 'teamWithdrawal',
+          fromUser: userId,
           amount: earningAmount
-        }).save(),
+          }).save(),
 
-        referrer.save()
-      ]);
+          referrer.save()
+        ]);
+      }
 
+      // Move up referral chain
       currentReferral = referrer.referredBy;
       level++;
     }
@@ -44,3 +48,4 @@ exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
     console.error('Error in distributeTeamWithdrawalEarnings:', err);
   }
 };
+
