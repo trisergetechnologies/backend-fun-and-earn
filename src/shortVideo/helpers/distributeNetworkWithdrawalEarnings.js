@@ -22,8 +22,9 @@ exports.distributeNetworkWithdrawalEarnings = async (user, withdrawalAmount) => 
           new EarningLog({
             userId: u._id,
             type: 'network',
-            source: 'withdrawal',
-            earnedFrom: user._id,
+            source: 'networkWithdrawal',
+            fromUser: user._id,
+            notes: '',
             amount: earning
           }).save(),
 
