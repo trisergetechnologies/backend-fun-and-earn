@@ -71,8 +71,13 @@ exports.withdrawFunds = async (req, res) => {
 
   try {
     const userId = req.user._id;
-    const bankDetails = req.body.user.eCartProfile?.bankDetails ? req.body.user.eCartProfile?.bankDetails : null;
-    const amount = req.body.user.wallets?.eCartWallet ? req.body.user.wallets?.eCartWallet : 0; 
+
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error('User not found');
+
+    const bankDetails = user.eCartProfile?.bankDetails || null;
+    const amount = user.wallets?.eCartWallet || 0;
+
 
     if (!bankDetails || !bankDetails?.accountNumber || !bankDetails?.accountHolderName || !bankDetails?.ifscCode) {
       return res.status(200).json({
@@ -89,9 +94,6 @@ exports.withdrawFunds = async (req, res) => {
         data: null
       });
     }
-
-    const user = await User.findById(userId).session(session);
-    if (!user) throw new Error('User not found');
 
     if (!user.wallets?.eCartWallet || user.wallets?.eCartWallet < amount) {
       return res.status(200).json({
