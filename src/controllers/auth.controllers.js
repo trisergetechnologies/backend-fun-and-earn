@@ -43,8 +43,8 @@ exports.register = async (req, res) => {
     }
 
     if (loginApp === 'shortVideo' && referralCode) {
-      const referrer = await User.findOne({ referralCode });
-      if (!referrer || !referrer.applications.includes('shortVideo') || !referrer.package) {
+      const referrer = await User.findOne({ referralCode }).populate('package');
+      if (!referrer || !referrer.applications.includes('shortVideo') || !referrer.package.name) {
         return res.status(200).json({
           success: false,
           message: 'Invalid referral code | Not a valid referrer !',

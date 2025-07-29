@@ -213,7 +213,7 @@ exports.getUserProfile = async (req, res) => {
         state_address: user.state_address,
         referralCode: user.referralCode,
         referredBy: user.referredBy,
-        packages: user.package,
+        packages: user.package?.name ? user.package : false,
         wallets: user.wallets,
         createdAt: user.createdAt
       }
