@@ -1,6 +1,7 @@
 const Otp = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword } = require("../utils/bcrypt");
+const nodemailer = require('nodemailer');
 
 // Setup transporter
 const transporter = nodemailer.createTransport({
