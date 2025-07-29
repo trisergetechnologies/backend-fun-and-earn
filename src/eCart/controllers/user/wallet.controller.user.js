@@ -58,13 +58,11 @@ exports.getWalletTransactions = async (req, res) => {
 };
 
 
-
-
 // Dummy payout function — replace with actual bank integration logic
 async function payout({ userId, bankDetails, amount }) {
-  // Example: Integrate with Razorpay, Cashfree, etc.
+
   console.log(`Payout initiated to ${bankDetails.accountHolderName} (Amount: ₹${amount})`);
-  return { success: true, transactionId: `TXN-${Date.now()}` }; // Simulated success
+  return { success: true, transactionId: `TXN-${Date.now()}` };
 }
 
 exports.withdrawFunds = async (req, res) => {
@@ -73,12 +71,21 @@ exports.withdrawFunds = async (req, res) => {
 
   try {
     const userId = req.user._id;
-    const { amount, bankDetails } = req.body;
-
-    if (!amount || amount <= 0 || !bankDetails || !bankDetails.accountNumber || !bankDetails.upiId) {
+    const bankDetails = req.body.user.eCartProfile.bankDetails;
+    const amount = req.body.user.wallets.eCartWallet
+    
+    if (!bankDetails || !bankDetails?.accountNumber || !bankDetails?.accountHolderName || !bankDetails?.ifscCode) {
       return res.status(200).json({
         success: false,
-        message: 'Missing or invalid withdrawal details',
+        message: 'Add bank details in profile',
+        data: null
+      });
+    }
+
+    if (!amount || amount < 100) {
+      return res.status(200).json({
+        success: false,
+        message: 'Minimum withdrawal amount is 100',
         data: null
       });
     }
@@ -86,16 +93,16 @@ exports.withdrawFunds = async (req, res) => {
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error('User not found');
 
-    if (!user.wallets.shortVideoWallet || user.wallets.shortVideoWallet < amount) {
+    if (!user.wallets.eCartWallet || user.wallets.eCartWallet < amount) {
       return res.status(200).json({
         success: false,
-        message: 'Insufficient short video wallet balance',
+        message: 'Insufficient wallet balance',
         data: null
       });
     }
 
     // Deduct wallet amount
-    user.wallets.shortVideoWallet -= amount;
+    user.wallets.eCartWallet -= amount;
     await user.save({ session });
 
     // Save transaction log
@@ -103,7 +110,7 @@ exports.withdrawFunds = async (req, res) => {
       userId,
       type: 'withdraw',
       source: 'manual',
-      fromWallet: 'shortVideoWallet',
+      fromWallet: 'eCartWallet',
       amount,
       status: 'pending',
       triggeredBy: 'user',
