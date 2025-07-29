@@ -71,9 +71,9 @@ exports.withdrawFunds = async (req, res) => {
 
   try {
     const userId = req.user._id;
-    const bankDetails = req.body.user.eCartProfile.bankDetails;
-    const amount = req.body.user.wallets.eCartWallet
-    
+    const bankDetails = req.body.user.eCartProfile?.bankDetails;
+    const amount = req.body.user.wallets?.eCartWallet
+
     if (!bankDetails || !bankDetails?.accountNumber || !bankDetails?.accountHolderName || !bankDetails?.ifscCode) {
       return res.status(200).json({
         success: false,
@@ -93,7 +93,7 @@ exports.withdrawFunds = async (req, res) => {
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error('User not found');
 
-    if (!user.wallets.eCartWallet || user.wallets.eCartWallet < amount) {
+    if (!user.wallets?.eCartWallet || user.wallets?.eCartWallet < amount) {
       return res.status(200).json({
         success: false,
         message: 'Insufficient wallet balance',
