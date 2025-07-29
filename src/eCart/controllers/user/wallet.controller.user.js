@@ -71,8 +71,8 @@ exports.withdrawFunds = async (req, res) => {
 
   try {
     const userId = req.user._id;
-    const bankDetails = req.body.user.eCartProfile?.bankDetails;
-    const amount = req.body.user.wallets?.eCartWallet
+    const bankDetails = req.body.user.eCartProfile?.bankDetails ? req.body.user.eCartProfile?.bankDetails : null;
+    const amount = req.body.user.wallets?.eCartWallet ? req.body.user.wallets?.eCartWallet : 0; 
 
     if (!bankDetails || !bankDetails?.accountNumber || !bankDetails?.accountHolderName || !bankDetails?.ifscCode) {
       return res.status(200).json({
