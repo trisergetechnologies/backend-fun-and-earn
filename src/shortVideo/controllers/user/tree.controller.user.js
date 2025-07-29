@@ -41,7 +41,7 @@ exports.getTeam = async (req, res) => {
     const rootUser = await User.findById(userId);
 
     if (!rootUser) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
         message: 'User not found',
         data: null
@@ -60,7 +60,8 @@ exports.getTeam = async (req, res) => {
           email: rootUser.email,
           phone: rootUser.phone,
           referralCode: rootUser.referralCode,
-          referredBy: rootUser.referredBy
+          referredBy: rootUser.referredBy,
+          package: rootUser.package?.name ? rootUser.package : null
         },
         referrals: referralTree
       }
