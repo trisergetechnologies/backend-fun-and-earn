@@ -15,7 +15,7 @@ exports.addProduct = async (req, res) => {
       : 0;
 
     // ✅ Basic validation
-    if (!title || isNaN(price) || isNaN(stock) || !categoryId) {
+    if (!title || isNaN(price) || isNaN(stock) || !categoryId || !sellerId) {
       return res.status(200).json({
         success: false,
         message: 'Missing or invalid required fields',
