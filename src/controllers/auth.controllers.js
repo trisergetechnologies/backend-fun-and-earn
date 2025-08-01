@@ -21,6 +21,16 @@ exports.register = async (req, res) => {
       state_address // for eCart
     } = req.body;
 
+    function isValidEmail(email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+    }
+    const isValid = isValidEmail(email);
+
+    if(!isValid){
+      return res.status(200).json({ success: false, message: 'Please enter a valid email address', data: null });
+    }
+
     if (!ALLOWED_ROLES.includes(role)) {
       return res.status(200).json({ success: false, message: 'Invalid role for registration', data: null });
     }
