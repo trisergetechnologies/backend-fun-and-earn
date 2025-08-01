@@ -27,7 +27,7 @@ const CategorySchema = new mongoose.Schema({
 
   ownerRole: {
     type: String,
-    enum: ['seller'],
+    enum: ['seller', 'admin'],
     required: true
   },
 
