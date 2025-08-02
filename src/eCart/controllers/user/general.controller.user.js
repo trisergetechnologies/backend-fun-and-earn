@@ -139,7 +139,7 @@ exports.getRewards = async (req, res) => {
       path: 'wallets.rewardWallet',
       model: 'Coupon',
       match: { isActive: true },
-      select: 'code title description isRedeemed value createdAt'
+      select: 'code title description isActive isRedeemed value createdAt'
     });
 
     return res.status(200).json({
