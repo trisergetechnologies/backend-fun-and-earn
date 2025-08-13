@@ -83,6 +83,8 @@ exports.getProducts = async (req, res) => {
   try {
     const admin = req.user;
     const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
 
     // If ID is provided → return single product with full details
     if (id) {
@@ -111,13 +113,21 @@ exports.getProducts = async (req, res) => {
 
     // If no ID → return all products (active and inactive)
     const allProducts = await Product.find()
+      .skip(skip)
+      .limit(parseInt(limit))
       .populate('sellerId', 'name email role')
       .populate('categoryId', 'title slug');
+
+    const totalProducts = await Product.countDocuments();
+    const totalPages = Math.ceil(totalProducts / limit);
 
     return res.status(200).json({
       success: true,
       message: 'All products fetched successfully',
-      data: allProducts
+      data: {
+        products: allProducts,
+        totalPages
+      }
     });
 
   } catch (err) {
