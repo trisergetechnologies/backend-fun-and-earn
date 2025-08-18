@@ -7,6 +7,6 @@ userOrderRouter.post('/placeorder/walletonly', placeOrderWalletOnly);
 userOrderRouter.get('/getorders', getOrders);
 userOrderRouter.patch('/cancelorder', cancelOrder);
 
-userOrderRouter.patch('/get-invoice/:orderId', downloadInvoice);
+userOrderRouter.get('/get-invoice/:orderId', downloadInvoice);
 
 module.exports = userOrderRouter;
