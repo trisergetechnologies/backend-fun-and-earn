@@ -465,7 +465,7 @@ exports.downloadInvoice = async (req, res) => {
       fs.unlinkSync(filePath);
       console.log(`Old invoice deleted: ${filePath}`);
     }
-    
+
     const baseUrl = `https://${req.get('host')}`;
     const publicUrl = `${baseUrl}/invoices/invoice-${order._id}.pdf`;
 
@@ -513,18 +513,18 @@ exports.downloadInvoice = async (req, res) => {
 
       doc.text(item.productTitle, 50, doc.y, { continued: true });
       doc.text(item.quantity, 250, doc.y, { continued: true });
-      doc.text(`₹${item.priceAtPurchase.toFixed(2)}`, 300, doc.y, { continued: true });
-      doc.text(`₹${gstAmount.toFixed(2)}`, 370, doc.y, { continued: true });
-      doc.text(`₹${lineTotal.toFixed(2)}`, 440);
+      doc.text(`₹${item.priceAtPurchase?.toFixed(2)}`, 300, doc.y, { continued: true });
+      doc.text(`₹${gstAmount?.toFixed(2)}`, 370, doc.y, { continued: true });
+      doc.text(`₹${lineTotal?.toFixed(2)}`, 440);
     });
 
     doc.moveDown(2);
 
     // ---- Summary ----
     doc.font("Helvetica-Bold");
-    doc.text(`Amount: ₹${(order.totalAmount - order.totalGstAmount).toFixed(2)}`);
-    doc.text(`GST: ₹${order.totalGstAmount.toFixed(2)}`);
-    doc.text(`Final Total: ₹${order.finalAmountPaid.toFixed(2)}`);
+    doc.text(`Amount: ₹${(order.totalAmount - order.totalGstAmount)?.toFixed(2)}`);
+    doc.text(`GST: ₹${order.totalGstAmount?.toFixed(2)}`);
+    doc.text(`Final Total: ₹${order.finalAmountPaid?.toFixed(2)}`);
     doc.font("Helvetica");
     doc.moveDown();
 
