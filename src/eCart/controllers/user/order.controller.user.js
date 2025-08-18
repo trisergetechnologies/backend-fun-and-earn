@@ -238,7 +238,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
     // 4. Wallet check
     const walletBalance = userDoc.wallets.eCartWallet;
     if (walletBalance < subtotal) {
-      throw new Error(`Insufficient wallet balance. Required ₹${subtotal}, available ₹${walletBalance}`);
+      throw new Error(`Insufficient wallet balance. Required INR${subtotal}, available INR${walletBalance}`);
     }
 
     const totalAmount = subtotal + cart.totalGstAmount;
@@ -470,155 +470,175 @@ exports.downloadInvoice = async (req, res) => {
     const publicUrl = `${baseUrl}/invoices/invoice-${order._id}.pdf`;
 
     // Create PDF
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ margin: 40 });
     const writeStream = fs.createWriteStream(filePath);
     doc.pipe(writeStream);
 
-    // ---------- HEADER ----------
+    // ---------- BRAND HEADER ----------
     doc
-      .fontSize(20)
-      .text("DreamMart", { align: "center" })
-      .moveDown(0.5);
+      .rect(0, 0, doc.page.width, 70)
+      .fill("#2C3E50");
 
+    doc
+      .fillColor("#fff")
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text("AARUSH MP DREAMS (OPC) Pvt. Ltd.", 40, 20);
+
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#ecf0f1")
+      .text("No. 242, Araliganur, Siruguppa - 583121", 40, 45)
+      .text("GSTIN: 29ABBCA7044H1ZN", 40, 60);
+
+    doc.moveDown(3);
+
+    // ---------- INVOICE META ----------
     doc
       .fontSize(14)
-      .text("INVOICE", { align: "center" })
-      .moveDown(1);
+      .fillColor("#34495E")
+      .font("Helvetica-Bold")
+      .text("Invoice Details", { underline: true });
 
-    // ---------- ORDER INFO ----------
+    doc.moveDown(0.5);
     doc
-      .fontSize(10)
-      .text(`Invoice ID: ${order._id}`)
-      .text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`)
-      .text(`Payment Status: ${order.paymentStatus}`)
-      .text(`Order Status: ${order.status}`)
-      .moveDown(1);
+      .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
+      .text(`Invoice #: ${order._id}`)
+      .text(`Invoice Date: ${moment(order.createdAt).format("DD/MM/YYYY")}`);
 
-    // ---------- CUSTOMER INFO ----------
+    doc.moveDown(1.5);
+
+    // ---------- BILLING INFO ----------
     doc
-      .fontSize(12)
-      .text("Billed To:", { underline: true })
-      .fontSize(10)
-      .text(order.userId?.name || "N/A")
-      .text(addr?.street || "")
-      .text(`${addr?.city || ""}, ${addr?.state || ""} - ${addr?.postalCode || ""}`)
-      .text(`Phone: ${addr?.phone || ""}`)
-      .moveDown(1);
+      .fontSize(14)
+      .fillColor("#34495E")
+      .font("Helvetica-Bold")
+      .text("Billed To", { underline: true });
 
-    // ---------- TABLE HEADERS ----------
-    const tableTop = doc.y + 20;
-    const startX = 50;
+    doc.moveDown(0.5);
+    doc
+      .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
+      .text(`${addr.fullName}`)
+      .text(`${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}`)
+      .text(`📞 ${addr.phone}`);
+
+    doc.moveDown(2);
+
+    // ---------- ORDER ITEMS TABLE ----------
+    const tableTop = doc.y;
+    const startX = 40;
     const colWidths = {
       product: 200,
       qty: 60,
       price: 80,
       gst: 80,
-      total: 80,
+      total: 100,
     };
 
+    // Table Header
     doc
-      .fontSize(10)
+      .rect(startX - 5, tableTop - 5, 520, 25)
+      .fill("#ecf0f1")
+      .stroke();
+
+    doc
+      .fillColor("#2C3E50")
+      .font("Helvetica-Bold")
+      .fontSize(12)
       .text("Product", startX, tableTop, { width: colWidths.product })
       .text("Qty", startX + colWidths.product, tableTop, {
         width: colWidths.qty,
-        align: "right",
+        align: "center",
       })
-      .text("Price (₹)", startX + colWidths.product + colWidths.qty, tableTop, {
+      .text("Price (INR)", startX + colWidths.product + colWidths.qty, tableTop, {
         width: colWidths.price,
         align: "right",
       })
-      .text("GST (₹)", startX + colWidths.product + colWidths.qty + colWidths.price, tableTop, {
+      .text("GST (INR)", startX + colWidths.product + colWidths.qty + colWidths.price, tableTop, {
         width: colWidths.gst,
         align: "right",
       })
-      .text("Total (₹)", startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, tableTop, {
+      .text("Total (INR)", startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, tableTop, {
         width: colWidths.total,
         align: "right",
       });
 
-    doc.moveTo(startX, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+    doc.moveDown(1);
+    let yPos = doc.y + 5;
 
-    // ---------- TABLE ROWS ----------
-    let y = tableTop + 25;
-    let subTotal = 0;
-    let totalGST = 0;
+    // Rows
+    doc.font("Helvetica").fontSize(11).fillColor("#000");
+    order.items.forEach((item, i) => {
+      const lineTotal = item.finalPriceAtPurchase * item.quantity;
+      const gstAmount = (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
+      const rowHeight = 22;
+      const rowY = yPos + i * rowHeight;
 
-    order.items.forEach((item) => {
-      const product = item.productId || {};
-      const qty = Number(item.quantity) || 0;
-      const price = Number(item.priceAtPurchase) || 0;  // ✅ FIX
-      const gstRate = Number(product.gst) || 0;
+      if (i % 2 === 0) {
+        doc.rect(startX - 5, rowY - 4, 520, rowHeight).fill("#fdfdfd").stroke();
+        doc.fillColor("#000");
+      }
 
-      const baseTotal = price * qty;
-      const gstAmt = baseTotal * gstRate;
-      const lineTotal = baseTotal + gstAmt;
+      doc.text(item.productTitle, startX, rowY, { width: colWidths.product });
+      doc.text(item.quantity.toString(), startX + colWidths.product, rowY, {
+        width: colWidths.qty,
+        align: "center",
+      });
+      doc.text(`INR${item.priceAtPurchase?.toFixed(2)}`, startX + colWidths.product + colWidths.qty, rowY, {
+        width: colWidths.price,
+        align: "right",
+      });
+      doc.text(`INR${(item?.productId?.gst * item?.priceAtPurchase)?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price, rowY, {
+        width: colWidths.gst,
+        align: "right",
+      });
+      doc.text(`INR${lineTotal?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, rowY, {
+        width: colWidths.total,
+        align: "right",
+      });
 
-      subTotal += baseTotal;
-      totalGST += gstAmt;
-
-      doc
-        .fontSize(10)
-        .text(product.title || "Unknown", startX, y, { width: colWidths.product })
-        .text(qty.toString(), startX + colWidths.product, y, {
-          width: colWidths.qty,
-          align: "right",
-        })
-        .text(price.toFixed(2), startX + colWidths.product + colWidths.qty, y, {
-          width: colWidths.price,
-          align: "right",
-        })
-        .text(gstAmt.toFixed(2), startX + colWidths.product + colWidths.qty + colWidths.price, y, {
-          width: colWidths.gst,
-          align: "right",
-        })
-        .text(lineTotal.toFixed(2), startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, y, {
-          width: colWidths.total,
-          align: "right",
-        });
-
-      y += 20;
+      yPos = rowY;
     });
 
-    // ---------- SUMMARY ----------
-    const summaryY = y + 20;
+    doc.moveDown(3);
+
+    // ---------- SUMMARY BOX ----------
     doc
-      .fontSize(10)
-      .text("Subtotal:", 400, summaryY, { width: 100, align: "right" })
-      .text(subTotal.toFixed(2), 500, summaryY, { width: 80, align: "right" });
+      .rect(startX - 5, doc.y - 5, 250, 70)
+      .stroke("#BDC3C7");
 
     doc
-      .text("GST Total:", 400, summaryY + 15, { width: 100, align: "right" })
-      .text(totalGST.toFixed(2), 500, summaryY + 15, { width: 80, align: "right" });
-
-    doc
+      .font("Helvetica-Bold")
       .fontSize(12)
-      .text("Grand Total:", 400, summaryY + 35, { width: 100, align: "right", underline: true })
-      .text(order.totalAmount.toFixed(2), 500, summaryY + 35, {
-        width: 80,
-        align: "right",
+      .fillColor("#34495E")
+      .text("Summary", startX, doc.y, { underline: true });
+
+    doc.moveDown(0.5);
+    doc
+      .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
+      .text(`Amount: INR${(order.totalAmount - order.totalGstAmount)?.toFixed(2)}`)
+      .text(`GST: INR${order.totalGstAmount?.toFixed(2)}`)
+      .text(`Final Total: INR${order.finalAmountPaid?.toFixed(2)}`, {
         underline: true,
       });
 
-    // ---------- TRACKING UPDATES ----------
-    const trackingY = summaryY + 80;
-    doc
-      .fontSize(12)
-      .text("Tracking Updates:", startX, trackingY, { underline: true });
-
-    let ty = trackingY + 20;
-    (order.trackingUpdates || []).forEach((update) => {
-      doc
-        .fontSize(9)
-        .text(`${new Date(update.timestamp).toLocaleString()} - ${update.status}`, startX, ty, { width: 500 });
-      ty += 15;
-    });
+    doc.moveDown(2);
 
     // ---------- FOOTER ----------
     doc
-      .fontSize(10)
-      .text("Thank you for shopping with DreamMart!", 50, 750, { align: "center" });
+      .fontSize(9)
+      .fillColor("#7f8c8d")
+      .text("This is a system generated invoice under Tax rules of India.", { align: "center" });
 
     doc.end();
+
     // Wait until file is written before sending response
     writeStream.on("finish", () => {
       res.json({
