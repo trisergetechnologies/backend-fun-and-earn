@@ -64,7 +64,7 @@ exports.placeOrder = async (req, res) => {
 
       const itemTotal = product.finalPrice * item.quantity;
       subtotal += itemTotal;
-
+      
       orderItems.push({
         productId: product._id,
         sellerId: product.sellerId,
@@ -80,14 +80,15 @@ exports.placeOrder = async (req, res) => {
       product.stock -= item.quantity;
       await product.save({ session });
     }
+    let grossPayable = subtotal + cart.totalGstAmount;
 
     // 5. Wallet usage
     let usedWalletAmount = 0;
-    let finalAmountPaid = subtotal + cart.totalGstAmount;
+    let finalAmountPaid = grossPayable;
 
     if (cart.useWallet && userDoc.wallets.eCartWallet > 0) {
-      usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, subtotal);
-      finalAmountPaid = subtotal - usedWalletAmount;
+      usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, grossPayable);
+      finalAmountPaid = grossPayable - usedWalletAmount;
 
       userDoc.wallets.eCartWallet -= usedWalletAmount;
       await userDoc.save({ session });
@@ -139,7 +140,7 @@ exports.placeOrder = async (req, res) => {
         totalAmount: subtotal,
         walletUsed: usedWalletAmount,
         paidAmount: finalAmountPaid,
-        totalGstAmount: totalGstAmount
+        totalGstAmount: cart.totalGstAmount
       }
     });
 
@@ -285,6 +286,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
         orderId: order._id,
         totalAmount: subtotal,
         paidAmount: 0,
+        totalGstAmount: cart.totalGstAmount,
         walletUsed: subtotal
       }
     });
