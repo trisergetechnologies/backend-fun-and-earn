@@ -470,7 +470,7 @@ exports.downloadInvoice = async (req, res) => {
     const publicUrl = `${baseUrl}/invoices/invoice-${order._id}.pdf`;
 
     // Create PDF
-  const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
 
     // ---------- HEADER ----------
@@ -544,19 +544,21 @@ exports.downloadInvoice = async (req, res) => {
 
     order.items.forEach((item) => {
       const product = item.productId || {};
-      const qty = item.quantity;
-      const price = item.price;
-      const gstRate = product.gst || 0;
-      const gstAmt = price * qty * gstRate;
-      const lineTotal = price * qty + gstAmt;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.priceAtPurchase) || 0;  // ✅ FIX
+      const gstRate = Number(product.gst) || 0;
 
-      subTotal += price * qty;
+      const baseTotal = price * qty;
+      const gstAmt = baseTotal * gstRate;
+      const lineTotal = baseTotal + gstAmt;
+
+      subTotal += baseTotal;
       totalGST += gstAmt;
 
       doc
         .fontSize(10)
         .text(product.title || "Unknown", startX, y, { width: colWidths.product })
-        .text(qty, startX + colWidths.product, y, {
+        .text(qty.toString(), startX + colWidths.product, y, {
           width: colWidths.qty,
           align: "right",
         })
