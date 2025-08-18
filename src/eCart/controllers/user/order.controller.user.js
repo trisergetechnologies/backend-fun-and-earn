@@ -476,8 +476,8 @@ exports.downloadInvoice = async (req, res) => {
 
     // ---------- BRAND HEADER ----------
     doc
-      .rect(0, 0, doc.page.width, 70)
-      .fill("#2C3E50");
+      .rect(0, 0, doc.page.width, 80)
+      .fill("#10b981");
 
     doc
       .fillColor("#fff")
@@ -525,7 +525,7 @@ exports.downloadInvoice = async (req, res) => {
       .fillColor("#000")
       .text(`${addr.fullName}`)
       .text(`${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}`)
-      .text(`📞 ${addr.phone}`);
+      .text(`${addr.phone}`);
 
     doc.moveDown(2);
 
@@ -547,7 +547,7 @@ exports.downloadInvoice = async (req, res) => {
       .stroke();
 
     doc
-      .fillColor("#2C3E50")
+      .fillColor("#10b981")
       .font("Helvetica-Bold")
       .fontSize(12)
       .text("Product", startX, tableTop, { width: colWidths.product })
@@ -574,8 +574,8 @@ exports.downloadInvoice = async (req, res) => {
     // Rows
     doc.font("Helvetica").fontSize(11).fillColor("#000");
     order.items.forEach((item, i) => {
-      const lineTotal = item.finalPriceAtPurchase * item.quantity;
-      const gstAmount = (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
+      const gstAmount = (item?.productId?.gst * item?.priceAtPurchase) * item.quantity;
+      const lineTotal = (item.finalPriceAtPurchase + (item?.productId?.gst * item?.priceAtPurchase)) * item.quantity;
       const rowHeight = 22;
       const rowY = yPos + i * rowHeight;
 
@@ -589,15 +589,15 @@ exports.downloadInvoice = async (req, res) => {
         width: colWidths.qty,
         align: "center",
       });
-      doc.text(`INR${item.priceAtPurchase?.toFixed(2)}`, startX + colWidths.product + colWidths.qty, rowY, {
+      doc.text(`INR ${item.priceAtPurchase?.toFixed(2)}`, startX + colWidths.product + colWidths.qty, rowY, {
         width: colWidths.price,
         align: "right",
       });
-      doc.text(`INR${(item?.productId?.gst * item?.priceAtPurchase)?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price, rowY, {
+      doc.text(`INR ${gstAmount?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price, rowY, {
         width: colWidths.gst,
         align: "right",
       });
-      doc.text(`INR${lineTotal?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, rowY, {
+      doc.text(`INR ${lineTotal?.toFixed(2)}`, startX + colWidths.product + colWidths.qty + colWidths.price + colWidths.gst, rowY, {
         width: colWidths.total,
         align: "right",
       });
@@ -623,9 +623,9 @@ exports.downloadInvoice = async (req, res) => {
       .font("Helvetica")
       .fontSize(11)
       .fillColor("#000")
-      .text(`Amount: INR${(order.totalAmount - order.totalGstAmount)?.toFixed(2)}`)
-      .text(`GST: INR${order.totalGstAmount?.toFixed(2)}`)
-      .text(`Final Total: INR${order.finalAmountPaid?.toFixed(2)}`, {
+      .text(`Amount: INR ${(order.totalAmount - order.totalGstAmount)?.toFixed(2)}`)
+      .text(`GST: INR ${order.totalGstAmount?.toFixed(2)}`)
+      .text(`Final Total: INR ${order.finalAmountPaid?.toFixed(2)}`, {
         underline: true,
       });
 
@@ -635,7 +635,7 @@ exports.downloadInvoice = async (req, res) => {
     doc
       .fontSize(9)
       .fillColor("#7f8c8d")
-      .text("This is a system generated invoice under Tax rules of India.", { align: "center" });
+      .text("This is a system generated invoice under the GST rules of India. Dream Mart thanks you for your purchase and looks forward to serving you again!", { align: "center" });
 
     doc.end();
 
