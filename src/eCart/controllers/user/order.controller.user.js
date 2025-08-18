@@ -444,7 +444,7 @@ exports.downloadInvoice = async (req, res) => {
     const order = await Order.findById(orderId)
       .populate("items.productId")
       .populate("buyerId");
-
+    const addr = order.deliveryAddress;
     if (!order) {
       return res
         .status(200)
