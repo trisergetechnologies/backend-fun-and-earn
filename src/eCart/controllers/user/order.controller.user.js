@@ -6,6 +6,9 @@ const Order = require('../../models/Order');
 const WalletTransaction = require('../../../models/WalletTransaction');
 const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
 
+const moment = require('moment');
+const PDFDocument = require('pdfkit');
+
 
 exports.placeOrder = async (req, res) => {
   const user = req.user;
@@ -426,5 +429,99 @@ exports.cancelOrder = async (req, res) => {
       success: false,
       message: 'Failed to cancel order'
     });
+  }
+};
+
+
+
+
+
+exports.downloadInvoice = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId)
+      .populate('items.productId')
+      .populate('buyerId');
+
+    if (!order) {
+      return res.status(200).json({success: false, message: 'Order not found', data: null });
+    }
+
+    // Create a PDF document
+    const doc = new PDFDocument({ margin: 50 });
+
+    // Set headers for download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=invoice-${order._id}.pdf`
+    );
+
+    doc.pipe(res);
+
+    // ---- Company Header ----
+    doc.fontSize(20).text("AARUSH MP DREAMS (OPC) Pvt. Ltd. ", { align: 'center' });
+    doc.fontSize(10).text("No. 242, Araliganur, Siruguppa - 583121", { align: 'center' });
+    doc.text("GSTIN: 29ABBCA7044H1ZN", { align: 'center' });
+    doc.moveDown(2);
+
+    // ---- Invoice Meta ----
+    doc.fontSize(12).text(`Invoice #: ${order._id}`);
+    doc.text(`Invoice Date: ${moment(order.createdAt).format('DD/MM/YYYY')}`);
+    doc.moveDown();
+
+    // ---- Buyer Details ----
+    doc.fontSize(12).text("Billed To:");
+    const addr = order.deliveryAddress;
+    doc.text(`${addr.fullName}`);
+    doc.text(`${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}`);
+    doc.text(`Phone: ${addr.phone}`);
+    doc.moveDown();
+
+    // ---- Items Table ----
+    doc.fontSize(12).text("Order Items:");
+    doc.moveDown(0.5);
+
+    // Table headers
+    doc.font('Helvetica-Bold');
+    doc.text("Product", 50, doc.y, { continued: true });
+    doc.text("Qty", 250, doc.y, { continued: true });
+    doc.text("Price", 300, doc.y, { continued: true });
+    doc.text("GST", 370, doc.y, { continued: true });
+    doc.text("Total", 440);
+    doc.font('Helvetica');
+
+    order.items.forEach(item => {
+      const lineTotal = item.finalPriceAtPurchase * item.quantity;
+      const gstAmount = (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
+
+      doc.text(item.productTitle, 50, doc.y, { continued: true });
+      doc.text(item.quantity, 250, doc.y, { continued: true });
+      doc.text(`₹${item.priceAtPurchase.toFixed(2)}`, 300, doc.y, { continued: true });
+      doc.text(`₹${gstAmount.toFixed(2)}`, 370, doc.y, { continued: true });
+      doc.text(`₹${lineTotal.toFixed(2)}`, 440);
+    });
+
+    doc.moveDown(2);
+
+    // ---- Summary ----
+    doc.font('Helvetica-Bold');
+    doc.text(`Amount: ₹${(order.totalAmount - order.totalGstAmount).toFixed(2)}`);
+    doc.text(`GST: ₹${order.totalGstAmount.toFixed(2)}`);
+    doc.text(`Final Total: ₹${order.finalAmountPaid.toFixed(2)}`);
+    doc.font('Helvetica');
+    doc.moveDown();
+
+    // ---- Footer ----
+    doc.fontSize(10).text("This is a system generated invoice under GST rules of India.", {
+      align: 'center'
+    });
+
+    // Finalize PDF
+    doc.end();
+
+  } catch (err) {
+    console.error("Invoice generation error:", err);
+    res.status(500).json({ success: false, message: "Failed to generate invoice", data: null });
   }
 };
