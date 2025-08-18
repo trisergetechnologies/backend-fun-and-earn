@@ -459,7 +459,15 @@ exports.downloadInvoice = async (req, res) => {
 
     // file path
     const filePath = path.join(invoicesDir, `invoice-${order._id}.pdf`);
-    const publicUrl = `${process.env.BASE_URL}/invoices/invoice-${order._id}.pdf`;
+
+    // 🔹 Agar purana invoice hai to delete karo
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`Old invoice deleted: ${filePath}`);
+    }
+    
+    const baseUrl = `https://${req.get('host')}`;
+    const publicUrl = `${baseUrl}/invoices/invoice-${order._id}.pdf`;
 
     // Create a PDF document
     const doc = new PDFDocument({ margin: 50 });
