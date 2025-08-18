@@ -474,33 +474,38 @@ exports.downloadInvoice = async (req, res) => {
     const writeStream = fs.createWriteStream(filePath);
     doc.pipe(writeStream);
 
-    // ---------- HEADER ----------
+    // ---------- BRAND HEADER ----------
     doc
+      .rect(0, 0, doc.page.width, 70)
+      .fill("#2C3E50");
+
+    doc
+      .fillColor("#fff")
       .fontSize(20)
       .font("Helvetica-Bold")
-      .fillColor("#2C3E50")
-      .text("AARUSH MP DREAMS (OPC) Pvt. Ltd.", { align: "center" });
+      .text("AARUSH MP DREAMS (OPC) Pvt. Ltd.", 40, 20);
 
     doc
       .fontSize(10)
       .font("Helvetica")
-      .fillColor("#555")
-      .text("No. 242, Araliganur, Siruguppa - 583121", { align: "center" })
-      .moveDown(0.3)
-      .text("GSTIN: 29ABBCA7044H1ZN", { align: "center" });
+      .fillColor("#ecf0f1")
+      .text("No. 242, Araliganur, Siruguppa - 583121", 40, 45)
+      .text("GSTIN: 29ABBCA7044H1ZN", 40, 60);
 
-    doc.moveDown(2);
+    doc.moveDown(3);
 
     // ---------- INVOICE META ----------
     doc
-      .fontSize(12)
+      .fontSize(14)
+      .fillColor("#34495E")
       .font("Helvetica-Bold")
-      .fillColor("#000")
       .text("Invoice Details", { underline: true });
 
     doc.moveDown(0.5);
     doc
       .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
       .text(`Invoice #: ${order._id}`)
       .text(`Invoice Date: ${moment(order.createdAt).format("DD/MM/YYYY")}`);
 
@@ -508,13 +513,16 @@ exports.downloadInvoice = async (req, res) => {
 
     // ---------- BILLING INFO ----------
     doc
-      .fontSize(12)
+      .fontSize(14)
+      .fillColor("#34495E")
       .font("Helvetica-Bold")
       .text("Billed To", { underline: true });
 
     doc.moveDown(0.5);
     doc
       .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
       .text(`${addr.fullName}`)
       .text(`${addr.street}, ${addr.city}, ${addr.state} - ${addr.pincode}`)
       .text(`📞 ${addr.phone}`);
@@ -523,24 +531,23 @@ exports.downloadInvoice = async (req, res) => {
 
     // ---------- ORDER ITEMS TABLE ----------
     const tableTop = doc.y;
-    const startX = 50;
+    const startX = 40;
     const colWidths = {
-      product: 180,
+      product: 200,
       qty: 60,
       price: 80,
       gst: 80,
       total: 100,
     };
 
-    // Table Header Background
+    // Table Header
     doc
-      .rect(startX - 5, tableTop - 5, 480, 25)
-      .fill("#f2f2f2")
+      .rect(startX - 5, tableTop - 5, 520, 25)
+      .fill("#ecf0f1")
       .stroke();
 
-    // Headers
     doc
-      .fillColor("#000")
+      .fillColor("#2C3E50")
       .font("Helvetica-Bold")
       .fontSize(12)
       .text("Product", startX, tableTop, { width: colWidths.product })
@@ -562,21 +569,18 @@ exports.downloadInvoice = async (req, res) => {
       });
 
     doc.moveDown(1);
-    let yPos = doc.y;
+    let yPos = doc.y + 5;
 
     // Rows
-    doc.font("Helvetica").fontSize(11);
+    doc.font("Helvetica").fontSize(11).fillColor("#000");
     order.items.forEach((item, i) => {
       const lineTotal = item.finalPriceAtPurchase * item.quantity;
-      const gstAmount =
-        (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
-
-      const rowHeight = 20;
+      const gstAmount = (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
+      const rowHeight = 22;
       const rowY = yPos + i * rowHeight;
 
-      // Alternate row shading
       if (i % 2 === 0) {
-        doc.rect(startX - 5, rowY - 5, 480, rowHeight).fill("#fafafa").stroke();
+        doc.rect(startX - 5, rowY - 4, 520, rowHeight).fill("#fdfdfd").stroke();
         doc.fillColor("#000");
       }
 
@@ -603,17 +607,22 @@ exports.downloadInvoice = async (req, res) => {
 
     doc.moveDown(3);
 
-    // ---------- SUMMARY ----------
+    // ---------- SUMMARY BOX ----------
+    doc
+      .rect(startX - 5, doc.y - 5, 250, 70)
+      .stroke("#BDC3C7");
+
     doc
       .font("Helvetica-Bold")
       .fontSize(12)
-      .fillColor("#000")
-      .text("Summary", { underline: true });
+      .fillColor("#34495E")
+      .text("Summary", startX, doc.y, { underline: true });
 
     doc.moveDown(0.5);
     doc
       .font("Helvetica")
       .fontSize(11)
+      .fillColor("#000")
       .text(`Amount: ₹${(order.totalAmount - order.totalGstAmount)?.toFixed(2)}`)
       .text(`GST: ₹${order.totalGstAmount?.toFixed(2)}`)
       .text(`Final Total: ₹${order.finalAmountPaid?.toFixed(2)}`, {
@@ -622,16 +631,39 @@ exports.downloadInvoice = async (req, res) => {
 
     doc.moveDown(2);
 
+    // ---------- ORDER STATUS & TRACKING ----------
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("#34495E")
+      .text("Order Status & Tracking", { underline: true });
+
+    doc.moveDown(0.5);
+    doc
+      .font("Helvetica")
+      .fontSize(11)
+      .fillColor("#000")
+      .text(`Current Status: ${order.status.toUpperCase()}`);
+
+    doc.moveDown(0.8);
+    order.trackingUpdates.forEach((update, idx) => {
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .fillColor("#555")
+        .text(
+          `${idx + 1}. ${update.status.toUpperCase()} - ${moment(update.updatedAt).format("DD/MM/YYYY HH:mm")} (${update.note || "No note"})`
+        );
+    });
+
+    doc.moveDown(2);
+
     // ---------- FOOTER ----------
     doc
       .fontSize(9)
-      .fillColor("#555")
-      .text(
-        "This is a system generated invoice under GST rules of India.",
-        { align: "center" }
-      );
+      .fillColor("#7f8c8d")
+      .text("This is a system generated invoice under GST rules of India.", { align: "center" });
 
-    // Finalize PDF
     doc.end();
 
     // Wait until file is written before sending response
