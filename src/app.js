@@ -21,6 +21,7 @@ const createApp = () => {
   // Initialize Express application
   const app = express();
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  app.use('/invoices', express.static(path.join(__dirname, '../invoices')));
   app.set('trust proxy', true);
   // ======================
   // Essential Middleware

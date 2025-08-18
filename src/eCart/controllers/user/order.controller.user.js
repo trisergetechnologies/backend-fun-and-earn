@@ -8,6 +8,8 @@ const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
 
 const moment = require('moment');
 const PDFDocument = require('pdfkit');
+const fs = require("fs");
+const path = require("path");
 
 
 exports.placeOrder = async (req, res) => {
@@ -440,34 +442,39 @@ exports.downloadInvoice = async (req, res) => {
   try {
     const { orderId } = req.params;
     const order = await Order.findById(orderId)
-      .populate('items.productId')
-      .populate('buyerId');
+      .populate("items.productId")
+      .populate("buyerId");
 
     if (!order) {
-      return res.status(200).json({success: false, message: 'Order not found', data: null });
+      return res
+        .status(200)
+        .json({ success: false, message: "Order not found", data: null });
     }
+
+    // ensure invoices folder exists (root level, same as uploads)
+    const invoicesDir = path.join(process.cwd(), "invoices");
+    if (!fs.existsSync(invoicesDir)) {
+      fs.mkdirSync(invoicesDir, { recursive: true });
+    }
+
+    // file path
+    const filePath = path.join(invoicesDir, `invoice-${order._id}.pdf`);
+    const publicUrl = `${process.env.BASE_URL}/invoices/invoice-${order._id}.pdf`;
 
     // Create a PDF document
     const doc = new PDFDocument({ margin: 50 });
-
-    // Set headers for download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=invoice-${order._id}.pdf`
-    );
-
-    doc.pipe(res);
+    const writeStream = fs.createWriteStream(filePath);
+    doc.pipe(writeStream);
 
     // ---- Company Header ----
-    doc.fontSize(20).text("AARUSH MP DREAMS (OPC) Pvt. Ltd. ", { align: 'center' });
-    doc.fontSize(10).text("No. 242, Araliganur, Siruguppa - 583121", { align: 'center' });
-    doc.text("GSTIN: 29ABBCA7044H1ZN", { align: 'center' });
+    doc.fontSize(20).text("AARUSH MP DREAMS (OPC) Pvt. Ltd. ", { align: "center" });
+    doc.fontSize(10).text("No. 242, Araliganur, Siruguppa - 583121", { align: "center" });
+    doc.text("GSTIN: 29ABBCA7044H1ZN", { align: "center" });
     doc.moveDown(2);
 
     // ---- Invoice Meta ----
     doc.fontSize(12).text(`Invoice #: ${order._id}`);
-    doc.text(`Invoice Date: ${moment(order.createdAt).format('DD/MM/YYYY')}`);
+    doc.text(`Invoice Date: ${moment(order.createdAt).format("DD/MM/YYYY")}`);
     doc.moveDown();
 
     // ---- Buyer Details ----
@@ -483,17 +490,18 @@ exports.downloadInvoice = async (req, res) => {
     doc.moveDown(0.5);
 
     // Table headers
-    doc.font('Helvetica-Bold');
+    doc.font("Helvetica-Bold");
     doc.text("Product", 50, doc.y, { continued: true });
     doc.text("Qty", 250, doc.y, { continued: true });
     doc.text("Price", 300, doc.y, { continued: true });
     doc.text("GST", 370, doc.y, { continued: true });
     doc.text("Total", 440);
-    doc.font('Helvetica');
+    doc.font("Helvetica");
 
-    order.items.forEach(item => {
+    order.items.forEach((item) => {
       const lineTotal = item.finalPriceAtPurchase * item.quantity;
-      const gstAmount = (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
+      const gstAmount =
+        (item.finalPriceAtPurchase - item.priceAtPurchase) * item.quantity;
 
       doc.text(item.productTitle, 50, doc.y, { continued: true });
       doc.text(item.quantity, 250, doc.y, { continued: true });
@@ -505,23 +513,37 @@ exports.downloadInvoice = async (req, res) => {
     doc.moveDown(2);
 
     // ---- Summary ----
-    doc.font('Helvetica-Bold');
+    doc.font("Helvetica-Bold");
     doc.text(`Amount: ₹${(order.totalAmount - order.totalGstAmount).toFixed(2)}`);
     doc.text(`GST: ₹${order.totalGstAmount.toFixed(2)}`);
     doc.text(`Final Total: ₹${order.finalAmountPaid.toFixed(2)}`);
-    doc.font('Helvetica');
+    doc.font("Helvetica");
     doc.moveDown();
 
     // ---- Footer ----
-    doc.fontSize(10).text("This is a system generated invoice under GST rules of India.", {
-      align: 'center'
-    });
+    doc.fontSize(10).text(
+      "This is a system generated invoice under GST rules of India.",
+      { align: "center" }
+    );
 
     // Finalize PDF
     doc.end();
 
+    // Wait until file is written before sending response
+    writeStream.on("finish", () => {
+      res.json({
+        success: true,
+        message: "Invoice generated",
+        url: publicUrl,
+      });
+    });
   } catch (err) {
     console.error("Invoice generation error:", err);
-    res.status(500).json({ success: false, message: "Failed to generate invoice", data: null });
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate invoice",
+      data: null,
+    });
   }
 };
+
