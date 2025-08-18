@@ -15,7 +15,34 @@ exports.getCart = async (req, res) => {
       return res.status(200).json({ success: true, message: 'Cart is empty', data: { items: [], useWallet: false } });
     }
 
-    return res.status(200).json({ success: true, message: 'Cart fetched successfully', data: cart });
+    // 🔹 Calculate GST dynamically
+    let totalGstAmount = 0;
+
+    cart.items.forEach(item => {
+      if (item.productId) {
+        const basePrice = item.productId.finalPrice || 0;
+        const gstRate = item.productId.gst || 0;
+        const quantity = item.quantity || 1;
+
+        const gstForItem = basePrice * gstRate * quantity;
+        totalGstAmount += gstForItem;
+      }
+    });
+
+    // 🔹 Round to 2 decimals
+    totalGstAmount = Number(totalGstAmount.toFixed(2));
+
+    // 🔹 Save only if change is significant
+    if (Math.abs(cart.totalGstAmount - totalGstAmount) > 0.01) {
+      cart.totalGstAmount = totalGstAmount;
+      await cart.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cart fetched successfully',
+      data: cart
+    });
 
   } catch (err) {
     console.error('Get Cart Error:', err);

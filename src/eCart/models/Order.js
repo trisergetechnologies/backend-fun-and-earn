@@ -79,6 +79,10 @@ const OrderSchema = new mongoose.Schema({
     required: true
   },
 
+  totalGstAmount: {
+    type: Number,
+  },
+
   paymentStatus: {
     type: String,
     enum: ['paid', 'failed'],

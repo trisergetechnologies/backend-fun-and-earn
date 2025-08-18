@@ -23,6 +23,11 @@ const CartSchema = new mongoose.Schema({
   },
 
   items: [CartItemSchema],
+  
+  totalGstAmount: {
+    type: Number,
+    default: 0
+  },
 
   useWallet: {
     type: Boolean,

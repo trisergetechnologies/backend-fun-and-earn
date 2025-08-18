@@ -83,7 +83,7 @@ exports.placeOrder = async (req, res) => {
 
     // 5. Wallet usage
     let usedWalletAmount = 0;
-    let finalAmountPaid = subtotal;
+    let finalAmountPaid = subtotal + cart.totalGstAmount;
 
     if (cart.useWallet && userDoc.wallets.eCartWallet > 0) {
       usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, subtotal);
@@ -114,6 +114,7 @@ exports.placeOrder = async (req, res) => {
       usedWalletAmount,
       totalAmount: subtotal,
       finalAmountPaid,
+      totalGstAmount: cart.totalGstAmount,
       paymentStatus: 'paid',
       status: 'placed',
       paymentInfo: {
@@ -137,7 +138,8 @@ exports.placeOrder = async (req, res) => {
         orderId: order._id,
         totalAmount: subtotal,
         walletUsed: usedWalletAmount,
-        paidAmount: finalAmountPaid
+        paidAmount: finalAmountPaid,
+        totalGstAmount: totalGstAmount
       }
     });
 
@@ -233,7 +235,9 @@ exports.placeOrderWalletOnly = async (req, res) => {
       throw new Error(`Insufficient wallet balance. Required ₹${subtotal}, available ₹${walletBalance}`);
     }
 
-    userDoc.wallets.eCartWallet -= subtotal;
+    const totalAmount = subtotal + cart.totalGstAmount;
+
+    userDoc.wallets.eCartWallet -= totalAmount;
     await userDoc.save({ session });
 
     // Log wallet transaction
@@ -257,6 +261,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
       usedWalletAmount: subtotal,
       totalAmount: subtotal,
       finalAmountPaid: 0,
+      totalGstAmount: cart.totalGstAmount,
       paymentStatus: 'paid',
       status: 'placed',
       paymentInfo: {

@@ -47,6 +47,11 @@ const ProductSchema = new mongoose.Schema({
     min: 0
   },
 
+  gst: {
+    type: Number,
+    default: 0.05
+  },
+
   stock: {
     type: Number,
     required: true,
