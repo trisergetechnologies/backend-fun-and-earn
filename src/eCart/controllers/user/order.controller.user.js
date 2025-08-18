@@ -471,7 +471,8 @@ exports.downloadInvoice = async (req, res) => {
 
     // Create PDF
     const doc = new PDFDocument({ margin: 50 });
-    doc.pipe(res);
+    const writeStream = fs.createWriteStream(filePath);
+    doc.pipe(writeStream);
 
     // ---------- HEADER ----------
     doc
