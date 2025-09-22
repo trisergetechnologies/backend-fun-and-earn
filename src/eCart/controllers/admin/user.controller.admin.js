@@ -21,7 +21,11 @@ exports.getUsers = async (req, res) => {
       const user = await User.findOne(
         { _id: id, role: 'user' },
         { password: 0, token: 0 }
-      );
+      )
+        .populate('shortVideoProfile.videoUploads')
+        .populate('eCartProfile.orders')
+        .populate('package')
+        .populate('wallets.rewardWallet');
 
       if (!user) {
         return res.status(200).json({
@@ -64,6 +68,10 @@ exports.getUsers = async (req, res) => {
 
     // Get all users (with optional filter)
     const users = await User.find(filter, { password: 0, token: 0 })
+      .populate('shortVideoProfile.videoUploads')
+      .populate('eCartProfile.orders')
+      .populate('package')
+      .populate('wallets.rewardWallet')
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -81,6 +89,7 @@ exports.getUsers = async (req, res) => {
     });
   }
 };
+
 
 // 2. Update User
 exports.updateUser = async (req, res) => {
