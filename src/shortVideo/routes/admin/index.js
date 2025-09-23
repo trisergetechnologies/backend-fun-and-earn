@@ -7,7 +7,7 @@ const shortVideoAdminRouter = Express.Router();
 shortVideoAdminRouter.get('/getteam', getTeam);
 shortVideoAdminRouter.get('/getnetwork', getNetwork);
 
-shortVideoAdminRouter.put('/getUsersWithWatchTime', getUsersWithWatchTime);
+shortVideoAdminRouter.get('/getUsersWithWatchTime', getUsersWithWatchTime);
 shortVideoAdminRouter.put('/creditWatchTimeEarnings',creditWatchTimeEarnings);
 shortVideoAdminRouter.put('/resetAllWatchTime', resetAllWatchTime);
 
