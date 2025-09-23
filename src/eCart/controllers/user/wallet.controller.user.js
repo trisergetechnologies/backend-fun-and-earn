@@ -146,6 +146,10 @@ exports.withdrawFunds = async (req, res) => {
     // Trigger earnings distribution
     await distributeTeamWithdrawalEarnings(userId, amount);
     await distributeNetworkWithdrawalEarnings(user, amount);
+    
+    await captureLeftovers.captureLeftoversForWithdrawal(user, amount, {
+      actionId: `withdraw-${user._id}-${Date.now()}`
+    });
 
     return res.status(200).json({
       success: true,

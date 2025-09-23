@@ -84,6 +84,10 @@ exports.purchasePackage = async (req, res) => {
     await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
     await distributeNetworkPurchaseEarnings(user);
 
+    await captureLeftovers.captureLeftoversForPurchase(user, selectedPackage.price, {
+      actionId: `purchase-${user._id}-${Date.now()}` // optional dedupe token (recommended)
+    });
+
     return res.status(200).json({
       success: true,
       message: `${selectedPackage.name} package purchased successfully`,
