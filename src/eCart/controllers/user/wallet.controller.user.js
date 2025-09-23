@@ -5,6 +5,8 @@ const { distributeTeamWithdrawalEarnings } = require('../../../shortVideo/helper
 const { distributeNetworkWithdrawalEarnings } = require('../../../shortVideo/helpers/distributeNetworkWithdrawalEarnings');
 const Coupon = require('../../../models/Coupon');
 
+const {captureLeftoversForWithdrawal} = require('../../../shortVideo/helpers/captureLeftovers');
+
 exports.getWallet = async (req, res) => {
   const userId = req.user._id;
 
@@ -147,7 +149,7 @@ exports.withdrawFunds = async (req, res) => {
     await distributeTeamWithdrawalEarnings(userId, amount);
     await distributeNetworkWithdrawalEarnings(user, amount);
     
-    await captureLeftovers.captureLeftoversForWithdrawal(user, amount, {
+    await captureLeftoversForWithdrawal(user, amount, {
       actionId: `withdraw-${user._id}-${Date.now()}`
     });
 

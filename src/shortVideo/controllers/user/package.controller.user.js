@@ -5,6 +5,8 @@ const { distributeTeamPurchaseEarnings } = require('../../helpers/distributeTeam
 const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeNetworkPurchaseEarnings');
 const WalletTransaction = require('../../../models/WalletTransaction');
 
+const { captureLeftoversForPurchase } = require('../../helpers/captureLeftovers');
+
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -84,7 +86,7 @@ exports.purchasePackage = async (req, res) => {
     await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
     await distributeNetworkPurchaseEarnings(user);
 
-    await captureLeftovers.captureLeftoversForPurchase(user, selectedPackage.price, {
+    await captureLeftoversForPurchase(user, selectedPackage.price, {
       actionId: `purchase-${user._id}-${Date.now()}` // optional dedupe token (recommended)
     });
 
