@@ -8,11 +8,11 @@ const shortVideoAdminRouter = Express.Router();
 shortVideoAdminRouter.get('/getteam', getTeam);
 shortVideoAdminRouter.get('/getnetwork', getNetwork);
 
-shortVideoAdminRouter.get('/getUsersWithWatchTime', getUsersWithWatchTime);
-shortVideoAdminRouter.put('/creditWatchTimeEarnings',creditWatchTimeEarnings);
-shortVideoAdminRouter.put('/resetAllWatchTime', resetAllWatchTime);
+shortVideoAdminRouter.get('/getuserswithwatchtime', getUsersWithWatchTime);
+shortVideoAdminRouter.put('/creditwatchtimeearnings',creditWatchTimeEarnings);
+shortVideoAdminRouter.put('/resetallwatchtime', resetAllWatchTime);
 
-shortVideoAdminRouter.get('/getSystemWallet', getSystemWallet);
-shortVideoAdminRouter.get('/getSystemEarningLogs', getSystemEarningLogs);
+shortVideoAdminRouter.get('/getsystemwallet', getSystemWallet);
+shortVideoAdminRouter.get('/getsystemearninglogs', getSystemEarningLogs);
 
 module.exports = shortVideoAdminRouter
