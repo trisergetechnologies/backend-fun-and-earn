@@ -5,6 +5,7 @@ const Category = require('../eCart/models/Category');
 const { shortVideoActivate, eCartActivate } = require('../controllers/activate.controllers');
 const authMiddleware = require('../middlewares/authMiddleware');
 const { sendOtpForReset, resetPassword } = require('../controllers/reset.controllers');
+const { changePassword } = require('../eCart/controllers/user/general.controller.user');
 const authRouter = express.Router();
 
 authRouter.post('/register', register)
@@ -15,6 +16,8 @@ authRouter.post('/activateecart', authMiddleware(["user"]) ,eCartActivate);
 
 authRouter.post('/send-reset-otp', sendOtpForReset);
 authRouter.post('/reset-password', resetPassword);
+
+authRouter.post('/change-password', authMiddleware(['admin', 'user', 'seller']), changePassword);
 
 authRouter.post('/mockdata', async (req, res) => {
      try {
