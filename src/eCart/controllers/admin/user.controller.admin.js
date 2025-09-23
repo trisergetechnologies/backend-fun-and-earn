@@ -170,3 +170,39 @@ exports.deleteUser = async (req, res) => {
     });
   }
 };
+
+
+exports.getMe = async (req, res) => {
+  try {
+    const user = req.user;
+
+    return res.status(200).json({
+      success: true,
+      message: 'User profile fetched successfully',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        gender: user.gender,
+        phone: user.phone,
+        eCartProfile: user.eCartProfile,
+        shortVideoProfile: user.shortVideoProfile,
+        role: user.role,
+        applications: user.applications,
+        state_address: user.state_address,
+        referralCode: user.referralCode,
+        referredBy: user.referredBy,
+        packages: user.package?.name ? user.package : false,
+        wallets: user.wallets,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('Get User Error:', err);
+    return res.status(200).json({
+      success: false,
+      message: 'Internal Server Error',
+      data: null
+    });
+  }
+};
