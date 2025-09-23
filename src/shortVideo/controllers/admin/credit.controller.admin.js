@@ -1,5 +1,6 @@
 const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
+const EarningLog = require("../../models/EarningLog");
 
 // 10 hours = 36000 seconds
 const WATCH_TIME_THRESHOLD = 10 * 3600;
@@ -59,7 +60,6 @@ exports.creditWatchTimeEarnings = async (req, res) => {
 
     // If bulk mode is enabled, credit to all users meeting the threshold
     if (bulk) {
-      // Validate that the amount is positive
       if (amount <= 0) {
         return res.status(200).json({
           success: false,
@@ -68,7 +68,6 @@ exports.creditWatchTimeEarnings = async (req, res) => {
         });
       }
 
-      // Find all users who meet the watch time threshold
       const users = await User.find({
         'shortVideoProfile.watchTime': { $gte: WATCH_TIME_THRESHOLD }
       });
@@ -81,37 +80,29 @@ exports.creditWatchTimeEarnings = async (req, res) => {
         });
       }
 
-      // Start bulk credit process
       const bulkCreditResults = [];
 
       for (const user of users) {
-        // Add amount to user's wallet
         user.wallets.shortVideoWallet += amount;
-
-        // Reset the user's watch time
         user.shortVideoProfile.watchTime = 0;
-
-        // Save user
         await user.save();
 
-        // Log wallet transaction for each user
-        const transaction = await new WalletTransaction({
+        // ✅ Log into EarningLog instead of WalletTransaction
+        const log = await new EarningLog({
           userId: user._id,
-          type: 'earn',
-          source: 'watchTime',
-          fromWallet: 'system',
-          toWallet: 'shortVideoWallet',
           amount,
-          status: 'success',
+          source: 'watchTime', // ✅ make sure enum updated
+          fromUser: user._id,  // self, since watch time is their own effort
           triggeredBy: 'admin',
-          notes: `Credited watch time earnings after 10+ hours`
+          notes: `Credited watch time earnings after 10+ hours`,
+          status: 'success'
         }).save();
 
         bulkCreditResults.push({
           userId: user._id,
           creditedAmount: amount,
           newWalletBalance: user.wallets.shortVideoWallet,
-          transactionId: transaction._id
+          logId: log._id
         });
       }
 
@@ -122,7 +113,7 @@ exports.creditWatchTimeEarnings = async (req, res) => {
       });
     }
 
-    // If bulk is false, proceed with the single user credit (existing functionality)
+    // Single user credit
     const { userId: singleUserId, amount: singleAmount } = req.body;
 
     if (!singleUserId || !singleAmount || singleAmount <= 0) {
@@ -133,7 +124,6 @@ exports.creditWatchTimeEarnings = async (req, res) => {
       });
     }
 
-    // Find user with watch time >= 10 hours
     const user = await User.findOne({
       _id: singleUserId,
       'shortVideoProfile.watchTime': { $gte: WATCH_TIME_THRESHOLD }
@@ -147,26 +137,19 @@ exports.creditWatchTimeEarnings = async (req, res) => {
       });
     }
 
-    // Add money to wallet
     user.wallets.shortVideoWallet += singleAmount;
-
-    // Reset watch time
     user.shortVideoProfile.watchTime = 0;
-
-    // Save user
     await user.save();
 
-    // Log wallet transaction
-    await new WalletTransaction({
+    // ✅ Log into EarningLog instead of WalletTransaction
+    await new EarningLog({
       userId: user._id,
-      type: 'earn',
-      source: 'watchTime',
-      fromWallet: 'system',
-      toWallet: 'shortVideoWallet',
       amount: singleAmount,
-      status: 'success',
+      source: 'watchTime',
+      fromUser: user._id,
       triggeredBy: 'admin',
-      notes: `Credited watch time earnings after 10+ hours`
+      notes: `Credited watch time earnings after 10+ hours`,
+      status: 'success'
     }).save();
 
     return res.status(200).json({
@@ -188,6 +171,7 @@ exports.creditWatchTimeEarnings = async (req, res) => {
     });
   }
 };
+
 
 
 exports.resetAllWatchTime = async (req, res) => {

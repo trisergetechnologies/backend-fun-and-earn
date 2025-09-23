@@ -15,7 +15,7 @@ const EarningLogSchema = new mongoose.Schema({
 
   source: {
     type: String,
-    enum: ['teamPurchase', 'networkPurchase', 'teamWithdrawal', 'networkWithdrawal'],
+    enum: ['teamPurchase', 'networkPurchase', 'teamWithdrawal', 'networkWithdrawal', 'watchTime'],
     required: true
   },
 
