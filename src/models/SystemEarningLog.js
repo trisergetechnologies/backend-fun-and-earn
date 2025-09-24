@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const SystemEarningLogSchema = new mongoose.Schema({
   amount: { type: Number, required: true, min: 0 },
 
