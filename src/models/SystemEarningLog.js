@@ -26,7 +26,6 @@ const SystemEarningLogSchema = new mongoose.Schema({
   fromUser: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
-    required: function () { return this.type === 'inflow'; } // required only for inflows
   },
 
   context: { type: String, default: '' }, // details: "Week 39 payout", "Gold limit leftover", etc.
