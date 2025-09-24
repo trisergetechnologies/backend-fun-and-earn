@@ -1,34 +1,35 @@
-const mongoose = require('mongoose');
-
 const SystemEarningLogSchema = new mongoose.Schema({
-  amount: {
-    type: Number,
-    required: true,
-    min: 0
+  amount: { type: Number, required: true, min: 0 },
+
+  type: {
+    type: String,
+    enum: ['inflow', 'outflow'], // inflow = leftovers credited, outflow = rewards paid
+    required: true
   },
 
   source: {
     type: String,
-    enum: ['networkPurchase', 'teamPurchase', 'networkWithdrawal', 'teamWithdrawal'],
+    enum: [
+      'networkPurchase',
+      'teamPurchase',
+      'networkWithdrawal',
+      'teamWithdrawal',
+      'weeklyPayout',
+      'monthlyPayout',
+      'adminAdjustment'
+    ],
     required: true
   },
 
-  fromUser: {
-    type: mongoose.Schema.Types.ObjectId,
+  fromUser: { 
+    type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
-    required: true
+    required: function () { return this.type === 'inflow'; } // required only for inflows
   },
 
-  context: {
-    type: String,
-    default: '' // e.g. "Gold limit (10 of 14 ups)"
-  },
+  context: { type: String, default: '' }, // details: "Week 39 payout", "Gold limit leftover", etc.
 
-  status: {
-    type: String,
-    enum: ['success', 'failed'],
-    default: 'success'
-  }
+  status: { type: String, enum: ['success', 'failed'], default: 'success' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('SystemEarningLog', SystemEarningLogSchema);

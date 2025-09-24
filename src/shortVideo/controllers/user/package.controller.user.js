@@ -6,6 +6,7 @@ const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeN
 const WalletTransaction = require('../../../models/WalletTransaction');
 
 const { captureLeftoversForPurchase } = require('../../helpers/captureLeftovers');
+const Achievement = require('../../../models/Achievement');
 
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
@@ -90,6 +91,8 @@ exports.purchasePackage = async (req, res) => {
       actionId: `purchase-${user._id}-${Date.now()}` // optional dedupe token (recommended)
     });
 
+    await checkAndAssignAchievements(user);
+
     return res.status(200).json({
       success: true,
       message: `${selectedPackage.name} package purchased successfully`,
@@ -156,3 +159,28 @@ exports.getPackages = async (req, res) => {
   }
 };
 
+
+
+exports.getMyAchievement = async (req, res) => {
+  try {
+    const user = req.user;
+    const achievement = await Achievement.findOne({ userId: user._id });
+
+    if (!achievement) {
+      return res.status(200).json({
+        success: true,
+        message: "No achievements unlocked yet",
+        data: null
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Achievement fetched successfully",
+      data: achievement
+    });
+  } catch (err) {
+    console.error("GetAchievement Error:", err);
+    return res.status(500).json({ success: false, message: "Internal Server Error", data: null });
+  }
+};
