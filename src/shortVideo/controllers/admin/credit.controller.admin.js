@@ -177,8 +177,13 @@ exports.creditWatchTimeEarnings = async (req, res) => {
 exports.resetAllWatchTime = async (req, res) => {
   try {
     const result = await User.updateMany(
-      {},
-      { $set: { 'shortVideoProfile.watchTime': 0 } }
+      {
+        applications: 'shortVideo', // matches if array contains 'shortVideo'
+        'shortVideoProfile.watchTime': { $exists: true } // only if the field exists
+      },
+      {
+        $set: { 'shortVideoProfile.watchTime': 0 }
+      }
     );
 
     return res.status(200).json({
@@ -192,7 +197,7 @@ exports.resetAllWatchTime = async (req, res) => {
 
   } catch (err) {
     console.error('Reset Watch Time Error:', err);
-    return res.status(200).json({
+    return res.status(500).json({ // changed to 500 for error case
       success: false,
       message: 'Internal Server Error',
       data: null
