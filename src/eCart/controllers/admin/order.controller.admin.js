@@ -123,7 +123,7 @@ exports.updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    if(order.status === 'shipped' || order.status === 'delivered'){
+    if(order.status === 'delivered'){
       await generateCouponForOrder(order);
     }
 

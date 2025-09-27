@@ -4,6 +4,11 @@ const User = require("../../models/User");
 
 const generateCouponForOrder = async (order) => {
   try {
+    if (!order || !order._id) {
+      console.log(`[Coupon] Invalid order passed`);
+      return;
+    }
+
     // Prevent duplicate coupons for same order
     const existing = await Coupon.findOne({ earnedFromOrder: order._id });
     if (existing) {
@@ -11,11 +16,23 @@ const generateCouponForOrder = async (order) => {
       return;
     }
 
-    // Calculate coupon value = 20% of finalAmountPaid
-    const rewardValue = Math.round(order.finalAmountPaid * 0.2);
+    // Use order.totalAmount (cart/order value BEFORE GST). Fallback to finalAmountPaid if missing.
+    const baseAmount = typeof order.totalAmount === 'number' && order.totalAmount >= 0
+      ? order.totalAmount
+      : (typeof order.finalAmountPaid === 'number' ? order.finalAmountPaid : 0);
+
+    // Calculate coupon value = 5% of baseAmount
+    const rewardValue = Math.round(baseAmount * 0.05);
+
+    // If rewardValue is zero, skip coupon creation
+    if (rewardValue <= 0) {
+      console.log(`[Coupon] Reward value is zero for order ${order._id}, skipping coupon creation.`);
+      return;
+    }
 
     // Generate a unique code
-    let code, exists = true;
+    let code;
+    let exists = true;
     while (exists) {
       const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
       code = `COUPON-${rand}`;
@@ -38,6 +55,7 @@ const generateCouponForOrder = async (order) => {
       $push: { 'wallets.rewardWallet': coupon._id }
     });
 
+    console.log(`[Coupon] Created coupon ${code} for order ${order._id}, value ₹${rewardValue}`);
   } catch (err) {
     console.error(`[Coupon Error] Failed to create coupon for order ${order._id}:`, err.message);
   }
