@@ -16,6 +16,10 @@ const ACHIEVEMENTS = {
 
 /**
  * Count active members (users with package) at a given depth for a user
+ * Keeps the same logic as before: depth 1 = direct referrals, depth 2 = referrals of direct referrals, etc.
+ * Returns the number of active users (users with a package) exactly at that depth.
+ *
+ * NOTE: this performs repeated DB queries and can be expensive for high traffic; acceptable for now.
  */
 async function countActiveMembersAtDepth(user, depth) {
   if (!user || depth <= 0) return 0;
@@ -25,25 +29,42 @@ async function countActiveMembersAtDepth(user, depth) {
 
   try {
     for (let i = 0; i < depth; i++) {
-      if (currentLevelUsers.length === 0) break;
+      if (!currentLevelUsers || currentLevelUsers.length === 0) break;
 
-      nextLevelUsers = await User.find({
-        referredBy: { $in: currentLevelUsers.map(u => u.referralCode).filter(Boolean) },
-        package: { $ne: null } // only active
-      }).select("_id referralCode package");
+      const referralCodes = currentLevelUsers
+        .map(u => u.referralCode)
+        .filter(Boolean);
+
+      if (referralCodes.length === 0) {
+        nextLevelUsers = [];
+      } else {
+        nextLevelUsers = await User.find({
+          referredBy: { $in: referralCodes },
+          package: { $ne: null } // only active users count
+        }).select('_id referralCode package').lean();
+      }
 
       currentLevelUsers = nextLevelUsers;
     }
 
-    return currentLevelUsers.length;
+    return Array.isArray(currentLevelUsers) ? currentLevelUsers.length : 0;
   } catch (err) {
-    console.error("Error in countActiveMembersAtDepth:", err);
+    console.error('Error in countActiveMembersAtDepth:', err);
     return 0;
   }
 }
 
 /**
- * Check and assign achievements for all uplines of a new buyer
+ * Check and assign achievements for all uplines of a new buyer.
+ *
+ * Behavior:
+ * - Traverse up to 10 upline levels using referralCode stored in referredBy.
+ * - For each upline that has a package, compute counts for each achievement depth (1..10).
+ * - For every achievement level where the counted active members >= threshold, ensure a Achievement document exists.
+ * - Uses upsert with $setOnInsert to create the Achievement only if missing.
+ * - Handles duplicate-key (11000) gracefully (possible during concurrent runs).
+ *
+ * Input: newBuyer is expected to be a mongoose user doc (or a plain object with at least { referredBy })
  */
 async function checkAndAssignAchievements(newBuyer) {
   try {
@@ -51,64 +72,77 @@ async function checkAndAssignAchievements(newBuyer) {
 
     let currentReferral = newBuyer.referredBy;
     let levelUp = 0;
-    const visited = new Set(); // prevent circular referrals
+    const visited = new Set(); // avoid circular referrals
 
+    // Walk up to 10 uplines
     while (currentReferral && levelUp < 10) {
       if (visited.has(currentReferral)) {
-        console.warn(`⚠️ Circular referral detected at ${currentReferral}, stopping.`);
+        console.warn(`⚠️ Circular referral detected for referralCode=${currentReferral}. Stopping traversal.`);
         break;
       }
       visited.add(currentReferral);
 
+      // find upline (we need referralCode, referredBy and package presence)
       const upline = await User.findOne({ referralCode: currentReferral })
-        .select("_id referralCode package referredBy")
+        .select('_id referralCode package referredBy')
         .lean();
 
       if (!upline) {
+        // upline not found: stop traversing
         console.warn(`⚠️ Upline not found for referralCode=${currentReferral}`);
         break;
       }
 
+      // Move pointer up for next iteration BEFORE possible continue/break so chain advances
+      currentReferral = upline.referredBy;
+      levelUp++;
+
+      // If upline has no package (inactive), skip awarding achievements for them but continue up chain
       if (!upline.package) {
-        // Skip inactive uplines, but still move further up
-        currentReferral = upline.referredBy;
-        levelUp++;
         continue;
       }
 
-      // Check each achievement level for this upline
-      for (const [achLevel, { title, threshold }] of Object.entries(ACHIEVEMENTS)) {
+      // For each achievement level (1..10), compute count at that depth for this upline,
+      // and create a Achievement if threshold is met and the doc doesn't exist yet.
+      // Iterate levels in numeric order: low->high.
+      const keys = Object.keys(ACHIEVEMENTS).map(k => Number(k)).sort((a, b) => a - b);
+
+      for (const achLevel of keys) {
+        const { title, threshold } = ACHIEVEMENTS[achLevel];
+
         try {
-          const count = await countActiveMembersAtDepth(upline, Number(achLevel));
+          const count = await countActiveMembersAtDepth(upline, achLevel);
 
           if (count >= threshold) {
-            // Check existing achievement
-            const achievement = await Achievement.findOne({ userId: upline._id });
+            // Attempt to create the achievement only if it doesn't exist.
+            // Use upsert with $setOnInsert to set title and achievedAt on insert only.
+            // This avoids overwriting the original achievedAt if already present.
+            await Achievement.findOneAndUpdate(
+              { userId: upline._id, level: achLevel },
+              {
+                $setOnInsert: {
+                  title,
+                  achievedAt: new Date()
+                }
+              },
+              { upsert: true, new: true }
+            ).exec();
 
-            if (!achievement || achievement.level < achLevel) {
-                await Achievement.findOneAndUpdate(
-                    { userId: upline._id },
-                    {
-                        $max: { level: achLevel },
-                        $setOnInsert: { title, achievedAt: new Date() }
-                    },
-                    { upsert: true, new: true }
-                );
-
-              console.log(`🎉 User ${upline._id} unlocked achievement: ${title}`);
-            }
+            console.log(`🎉 Achievement ensured: user=${String(upline._id)}, level=${achLevel}, title="${title}"`);
           }
         } catch (err) {
-          console.error(`Error checking achievement level ${achLevel} for user ${upline._id}:`, err);
+          // catch unique-constraint race (duplicate key) and ignore it; log others
+          if (err && err.code === 11000) {
+            // Duplicate key — another process inserted the same achievement concurrently. OK to ignore.
+            console.warn(`🔁 Duplicate achievement insert race ignored for user=${String(upline._id)}, level=${achLevel}`);
+          } else {
+            console.error(`Error while awarding achievement level ${achLevel} to user ${String(upline._id)}:`, err);
+          }
         }
       }
-
-      // Move up referral chain
-      currentReferral = upline.referredBy;
-      levelUp++;
     }
   } catch (err) {
-    console.error("Error in checkAndAssignAchievements:", err);
+    console.error('Error in checkAndAssignAchievements:', err);
   }
 }
 
