@@ -2,7 +2,7 @@ const User = require('../../models/User');
 const EarningLog = require('../models/EarningLog');
 const Package = require('../../models/Package');
 
-const TEAM_PURCHASE_PERCENTAGES = [25, 10, 5, 4, 3, 3, 3, 3, 2, 2];
+const TEAM_PURCHASE_PERCENTAGES = [20, 7.5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
 
 exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
   try {

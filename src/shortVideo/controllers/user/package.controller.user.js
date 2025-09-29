@@ -4,7 +4,7 @@ const Package = require('../../../models/Package');
 const { distributeTeamPurchaseEarnings } = require('../../helpers/distributeTeamPurchaseEarnings');
 const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeNetworkPurchaseEarnings');
 const WalletTransaction = require('../../../models/WalletTransaction');
-
+const { checkAndAssignAchievements } = require('../../helpers/checkAndAssignAchievements');
 const { captureLeftoversForPurchase } = require('../../helpers/captureLeftovers');
 const Achievement = require('../../../models/Achievement');
 
