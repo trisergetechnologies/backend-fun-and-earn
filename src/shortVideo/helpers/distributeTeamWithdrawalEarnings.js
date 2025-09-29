@@ -2,7 +2,7 @@ const User = require("../../models/User");
 const EarningLog = require("../models/EarningLog");
 const Package = require('../../models/Package');
 
-const TEAM_WITHDRAWAL_PERCENTAGES = [5, 2, 1.5, 1.25, 1.10, 1, 0.9, 0.8, 0.7, 0.6];
+const TEAM_WITHDRAWAL_PERCENTAGES = [8.32, 3.33, 1.66, 1.33, 0.99, 0.99, 0.99, 0.99, 0.66, 0.66];
 
 exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
   try {
