@@ -10,8 +10,8 @@ const SystemWallet = require('../../models/SystemWallet');
 /**
  * Percentage arrays (must match your distribution code)
  */
-const TEAM_PURCHASE_PERCENTAGES = [25, 10, 5, 4, 3, 3, 3, 3, 2, 2];
-const TEAM_WITHDRAWAL_PERCENTAGES = [8.32, 3.33, 1.66, 1.33, 0.99, 0.99, 0.99, 0.99, 0.66, 0.66];
+const TEAM_PURCHASE_PERCENTAGES = [20, 7.5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1];
+const TEAM_WITHDRAWAL_PERCENTAGES = [5, 2, 1.5, 1.25, 1.10, 1, 0.9, 0.8, 0.7, 0.6];
 
 /**
  * Helper: safe rounding to 2 decimals
@@ -105,6 +105,7 @@ async function handleNetworkPurchaseLeftover(newUser, packagePrice, options = {}
       amount: missedAmount,
       source: 'networkPurchase',
       fromUser: buyerId,
+      type: 'inflow',
       context
     });
 
@@ -195,6 +196,7 @@ async function handleTeamPurchaseLeftover(newUser, packagePrice, options = {}) {
       amount: missedAmount,
       source: 'teamPurchase',
       fromUser: buyerId,
+      type: 'inflow',
       context
     });
 
@@ -278,6 +280,7 @@ async function handleNetworkWithdrawalLeftover(user, withdrawalAmount, options =
       amount: missedAmount,
       source: 'networkWithdrawal',
       fromUser: withdrawerId,
+      type: 'inflow',
       context
     });
 
@@ -360,6 +363,7 @@ async function handleTeamWithdrawalLeftover(user, withdrawalAmount, options = {}
       amount: missedAmount,
       source: 'teamWithdrawal',
       fromUser: withdrawerId,
+      type: 'inflow',
       context
     });
 
