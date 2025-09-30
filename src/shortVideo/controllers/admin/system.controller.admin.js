@@ -450,13 +450,8 @@ exports.getCompleteInfo = async (req, res) => {
 
 
 
-/**
- * Transfer all shortVideoWallet balances:
- * - Deduct full SV wallet
- * - Move 50% into eCartWallet
- * - Distribute team/network rewards
- * - Log system earning breakdown
- */
+
+
 exports.transferShortVideoToECart = async (req, res) => {
   try {
     const admin = req.user;
@@ -467,6 +462,7 @@ exports.transferShortVideoToECart = async (req, res) => {
       });
     }
 
+    // Phase 1: Sweep all users
     const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } });
     if (!users || users.length === 0) {
       return res.status(200).json({
@@ -476,27 +472,25 @@ exports.transferShortVideoToECart = async (req, res) => {
       });
     }
 
+    let snapshots = []; // keep { userId, withdrawalAmount, transferToECart }
     let totalTransferred = 0;
     let totalLogs = 0;
 
-    // process each user independently
     for (const user of users) {
       let retries = 0;
       let success = false;
 
       while (retries < 3 && !success) {
         try {
-          // fresh fetch inside retry
           const freshUser = await User.findById(user._id);
           const withdrawalAmount = round2(freshUser.wallets.shortVideoWallet);
           if (withdrawalAmount <= 0) break;
 
-          // calculate transfer
           const transferToECart = round2(withdrawalAmount * 0.5);
 
-          // atomic update: zero out SV wallet, add to ECART wallet
+          // atomic update
           const result = await User.updateOne(
-            { _id: freshUser._id, "wallets.shortVideoWallet": { $gt: 0 } },
+            { _id: freshUser._id, "wallets.shortVideoWallet": withdrawalAmount },
             {
               $set: { "wallets.shortVideoWallet": 0 },
               $inc: { "wallets.eCartWallet": transferToECart }
@@ -519,30 +513,11 @@ exports.transferShortVideoToECart = async (req, res) => {
             amount: transferToECart,
             status: "success",
             triggeredBy: "system",
-            notes: `User withdrew ₹${withdrawalAmount}. System allocated Team:14.85% + Network:16% + Admin:10% + Reserve:9.15%, and credited ₹${transferToECart} (50%) into eCart wallet.`
+            notes: `Auto-transfer: User had ₹${withdrawalAmount}, system credited ₹${transferToECart} (50%) to eCart and allocated rest for distributions.`
           });
 
-          // run team & network distributions
-          try {
-            const result1 = await distributeTeamWithdrawalEarnings(freshUser._id, withdrawalAmount);
-            await captureLeftovers(result1);
-
-            const result2 = await distributeNetworkWithdrawalEarnings(freshUser, withdrawalAmount);
-            await captureLeftovers(result2);
-
-            if (leftovers && leftovers.totalMissed > 0) {
-              console.log(`💰 Captured leftovers for withdrawal user=${user._id}, totalMissed=${leftovers.totalMissed}`);
-            }
-          } catch (distErr) {
-            console.error(`⚠️ Distribution error for user ${freshUser._id}:`, distErr.message);
-          }
-
-          // system earning log
+          // system earning log (transfer part only)
           const breakdown = {
-            team: round2(withdrawalAmount * 0.1485),
-            network: round2(withdrawalAmount * 0.16),
-            adminCharge: round2(withdrawalAmount * 0.10),
-            reserve: round2(withdrawalAmount * 0.0915),
             transfer: transferToECart
           };
 
@@ -552,8 +527,14 @@ exports.transferShortVideoToECart = async (req, res) => {
             source: "shortVideoToECart",
             fromUser: freshUser._id,
             breakdown,
-            context: `Auto-transfer from shortVideo → eCart for user ${freshUser._id}`,
+            context: `Snapshot withdrawal for user ${freshUser._id}`,
             status: "success"
+          });
+
+          // save snapshot for Phase 2
+          snapshots.push({
+            userId: freshUser._id,
+            withdrawalAmount
           });
 
           totalTransferred += transferToECart;
@@ -575,13 +556,28 @@ exports.transferShortVideoToECart = async (req, res) => {
       }
     }
 
+    // Phase 2: Run distributions + leftovers
+    for (const snap of snapshots) {
+      try {
+        const result1 = await distributeTeamWithdrawalEarnings(snap.userId, snap.withdrawalAmount);
+        await captureLeftovers(result1);
+
+        const freshUser = await User.findById(snap.userId); // needed because network takes full user
+        const result2 = await distributeNetworkWithdrawalEarnings(freshUser, snap.withdrawalAmount);
+        await captureLeftovers(result2);
+      } catch (distErr) {
+        console.error(`⚠️ Distribution error for user ${snap.userId}:`, distErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Funds transferred successfully from shortVideo → eCart",
+      message: "Funds transferred successfully from shortVideo → eCart, distributions applied",
       data: {
         totalUsers: users.length,
         totalTransferred,
-        logs: totalLogs
+        logs: totalLogs,
+        distributions: snapshots.length
       }
     });
 
