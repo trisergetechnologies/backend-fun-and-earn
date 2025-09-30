@@ -5,7 +5,7 @@ const SystemEarningLogSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    enum: ['inflow', 'outflow'], // inflow = leftovers credited, outflow = rewards paid
+    enum: ['inflow', 'outflow'], // inflow = money into system, outflow = money leaving system
     required: true
   },
 
@@ -18,7 +18,10 @@ const SystemEarningLogSchema = new mongoose.Schema({
       'teamWithdrawal',
       'weeklyPayout',
       'monthlyPayout',
-      'adminAdjustment'
+      'adminAdjustment',
+      'shortVideoToECart',  // new: SV → ECART transfer
+      'userWithdrawal',     // new: ECART → Bank payout
+      'rewardReserve'       // new: Reserve usage for payouts/giveaways
     ],
     required: true
   },
@@ -28,7 +31,17 @@ const SystemEarningLogSchema = new mongoose.Schema({
     ref: 'User',
   },
 
-  context: { type: String, default: '' }, // details: "Week 39 payout", "Gold limit leftover", etc.
+  // New: breakdown of distribution (optional, used when money splits into multiple buckets)
+  breakdown: {
+    team: { type: Number, default: 0 },        // team upline % distributed
+    network: { type: Number, default: 0 },     // network distribution
+    adminCharge: { type: Number, default: 0 }, // admin commission
+    reserve: { type: Number, default: 0 },     // set aside for rewards reserve
+    tds: { type: Number, default: 0 },         // TDS deducted on user withdrawal
+    remainder: { type: Number, default: 0 }    // rounding remainders, if any
+  },
+
+  context: { type: String, default: '' }, // e.g. "Week 39 payout", "Job run at 6am"
 
   status: { type: String, enum: ['success', 'failed'], default: 'success' }
 }, { timestamps: true });

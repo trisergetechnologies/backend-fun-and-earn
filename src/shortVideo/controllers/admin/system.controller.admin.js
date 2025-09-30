@@ -10,6 +10,9 @@ const EarningLog = require('../../models/EarningLog');
 const Coupon = require('../../../models/Coupon');
 const Video = require('../../models/Video');
 
+const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTeamWithdrawalEarnings');
+const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
+
 
 exports.getSystemEarningLogs = async (req, res) => {
   try {
@@ -439,6 +442,115 @@ exports.getCompleteInfo = async (req, res) => {
       success: false,
       message: 'Internal Server Error',
       data: null
+    });
+  }
+};
+
+
+
+exports.transferShortVideoToECart = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } }).session(session);
+
+    if (!users || users.length === 0) {
+      return res.status(200).json({
+        success: false,
+        message: "No users with shortVideo balance",
+        data: null
+      });
+    }
+
+    let totalTransferred = 0;
+    let totalLogs = [];
+
+    for (const user of users) {
+      const withdrawalAmount = round2(user.wallets.shortVideoWallet);
+      if (withdrawalAmount <= 0) continue;
+
+      // Deduct full balance from shortVideo wallet
+      user.wallets.shortVideoWallet = 0;
+
+      // Transfer 50% to eCart wallet
+      const transferToECart = round2(withdrawalAmount * 0.5);
+      user.wallets.eCartWallet += transferToECart;
+
+      // Log wallet transactions
+      await WalletTransaction.create([{
+        userId: user._id,
+        type: "withdraw",
+        source: "system",
+        fromWallet: "shortVideoWallet",
+        toWallet: "eCartWallet",
+        amount: transferToECart,
+        status: "success",
+        triggeredBy: "system",
+        notes: `Auto-transfer of 50% (₹${transferToECart}) from shortVideo to eCart wallet on withdrawal`
+      }], { session });
+
+      // Save updated user
+      await user.save({ session });
+
+      // Call team & network distributions
+      await distributeTeamWithdrawalEarnings(user._id, withdrawalAmount);
+      await distributeNetworkWithdrawalEarnings(user, withdrawalAmount);
+
+      // Breakdown calculation
+      const breakdown = {
+        team: round2(withdrawalAmount * 0.1485),
+        network: round2(withdrawalAmount * 0.16),
+        adminCharge: round2(withdrawalAmount * 0.10),
+        reserve: round2(withdrawalAmount * 0.0915),
+        transfer: transferToECart
+      };
+
+      totalTransferred += transferToECart;
+
+      // Create system earning log
+      const log = await SystemEarningLog.create([{
+        amount: withdrawalAmount,
+        type: "outflow",
+        source: "shortVideoToECart",
+        fromUser: user._id,
+        breakdown,
+        context: `Auto-transfer from SV→ECart for user ${user._id}`,
+        status: "success"
+      }], { session });
+
+      totalLogs.push(log);
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: "Funds transferred successfully from shortVideo → eCart",
+      data: {
+        totalUsers: users.length,
+        totalTransferred,
+        logs: totalLogs.length
+      }
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Transfer Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: err.message
     });
   }
 };
