@@ -524,6 +524,16 @@ exports.transferShortVideoToECart = async (req, res) => {
           try {
             await distributeTeamWithdrawalEarnings(freshUser._id, withdrawalAmount);
             await distributeNetworkWithdrawalEarnings(freshUser, withdrawalAmount);
+
+            // then capture leftovers (if any)
+            const leftovers = await captureLeftoversForWithdrawal(user, withdrawalAmount, {
+              actionId: `withdrawal:${user._id}:${Date.now()}`, // unique dedupe key
+              context: `Withdrawal leftover sweep for user ${user._id}, amount ₹${withdrawalAmount}`
+            });
+
+            if (leftovers && leftovers.totalMissed > 0) {
+              console.log(`💰 Captured leftovers for withdrawal user=${user._id}, totalMissed=${leftovers.totalMissed}`);
+            }
           } catch (distErr) {
             console.error(`⚠️ Distribution error for user ${freshUser._id}:`, distErr.message);
           }
