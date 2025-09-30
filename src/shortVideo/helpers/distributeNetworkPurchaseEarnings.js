@@ -1,8 +1,13 @@
-const Package = require('../../models/Package');
-const User = require('../../models/User');
-const EarningLog = require('../models/EarningLog');
-
-exports.distributeNetworkPurchaseEarnings = async (newUser) => {
+/**
+ * Network Purchase Distribution
+ * - Only uplines (above buyer) earn
+ * - Gold: up to 10 uplines
+ * - Diamond: up to 20 uplines
+ * - Each eligible gets 1% of package price
+ *
+ * Returns distribution summary for leftover tracking
+ */
+export const distributeNetworkPurchaseEarnings = async (newUser) => {
   try {
     const allUsers = await User.find({ serialNumber: { $ne: null } })
       .select('_id serialNumber package wallets')
@@ -12,18 +17,31 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
     const buyerSerial = newUser.serialNumber;
     await newUser.populate('package');
     const buyerPackagePrice = newUser.package.price;
+
     console.log("buyerPackagePrice", buyerPackagePrice);
+
+    let actualDistributed = 0; // ✅ track how much actually given
 
     for (const user of allUsers) {
       if (!user.package || user._id.equals(newUser._id)) continue;
 
       const maxRange = user.package.name === 'Diamond' ? 20 : 10;
-      const isInRange = Math.abs(user.serialNumber - buyerSerial) <= maxRange;
+
+      // ✅ Only ABOVE (uplines)
+      const isInRange =
+        user.serialNumber < buyerSerial && 
+        (buyerSerial - user.serialNumber) <= maxRange;
 
       if (isInRange) {
-        const amount = 0.01 * buyerPackagePrice;
+        const amount = +(0.01 * buyerPackagePrice).toFixed(2);
+
         user.wallets.shortVideoWallet = Number(user.wallets.shortVideoWallet || 0) + amount;
-        console.log("ye hai amount, user waller short video", amount, user.wallets.shortVideoWallet);
+        actualDistributed += amount;
+
+        console.log(
+          `Credited ₹${amount} to user ${user._id} (SN=${user.serialNumber}) for buyer SN=${buyerSerial}`
+        );
+
         await EarningLog.create({
           userId: user._id,
           source: 'networkPurchase',
@@ -34,7 +52,27 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
         await user.save();
       }
     }
+
+    // ✅ Return distribution metadata for leftovers
+    return {
+      type: "purchase",
+      mode: "network",
+      userId: newUser._id,
+      amountBase: buyerPackagePrice,
+      expectedPercent: 20,   // fixed rule
+      actualDistributed
+    };
+
   } catch (err) {
     console.error('Error in distributeNetworkPurchaseEarnings:', err);
+    return {
+      type: "purchase",
+      mode: "network",
+      userId: newUser?._id,
+      amountBase: newUser?.package?.price || 0,
+      expectedPercent: 20,
+      actualDistributed: 0,
+      error: err.message
+    };
   }
 };

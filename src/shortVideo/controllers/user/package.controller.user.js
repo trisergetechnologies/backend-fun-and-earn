@@ -5,8 +5,9 @@ const { distributeTeamPurchaseEarnings } = require('../../helpers/distributeTeam
 const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeNetworkPurchaseEarnings');
 const WalletTransaction = require('../../../models/WalletTransaction');
 const { checkAndAssignAchievements } = require('../../helpers/checkAndAssignAchievements');
-const { captureLeftoversForPurchase } = require('../../helpers/captureLeftovers');
+
 const Achievement = require('../../../models/Achievement');
+const { captureLeftovers } = require('../../helpers/captureLeftovers');
 
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
@@ -84,14 +85,17 @@ exports.purchasePackage = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
-    await distributeNetworkPurchaseEarnings(user);
 
-    await captureLeftoversForPurchase(user, selectedPackage.price, {
-      actionId: `purchase-${user._id}-${Date.now()}` // optional dedupe token (recommended)
-    });
+
+    const result1 = await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
+    await captureLeftovers(result1);
+
+    const result2 = await distributeNetworkPurchaseEarnings(user);
+    await captureLeftovers(result2);
 
     await checkAndAssignAchievements(user);
+
+
 
     return res.status(200).json({
       success: true,

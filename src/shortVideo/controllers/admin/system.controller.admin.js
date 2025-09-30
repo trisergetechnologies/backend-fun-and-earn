@@ -12,7 +12,8 @@ const Video = require('../../models/Video');
 
 const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTeamWithdrawalEarnings');
 const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
-const { captureLeftoversForWithdrawal } = require('../../helpers/captureLeftovers');
+const { captureLeftovers } = require('../../helpers/captureLeftovers');
+
 
 
 exports.getSystemEarningLogs = async (req, res) => {
@@ -523,14 +524,11 @@ exports.transferShortVideoToECart = async (req, res) => {
 
           // run team & network distributions
           try {
-            await distributeTeamWithdrawalEarnings(freshUser._id, withdrawalAmount);
-            await distributeNetworkWithdrawalEarnings(freshUser, withdrawalAmount);
+            const result1 = await distributeTeamWithdrawalEarnings(freshUser._id, withdrawalAmount);
+            await captureLeftovers(result1);
 
-            // then capture leftovers (if any)
-            const leftovers = await captureLeftoversForWithdrawal(user, withdrawalAmount, {
-              actionId: `withdrawal:${user._id}:${Date.now()}`, // unique dedupe key
-              context: `Withdrawal leftover sweep for user ${user._id}, amount ₹${withdrawalAmount}`
-            });
+            const result2 = await distributeNetworkWithdrawalEarnings(freshUser, withdrawalAmount);
+            await captureLeftovers(result2);
 
             if (leftovers && leftovers.totalMissed > 0) {
               console.log(`💰 Captured leftovers for withdrawal user=${user._id}, totalMissed=${leftovers.totalMissed}`);
