@@ -456,133 +456,132 @@ exports.getCompleteInfo = async (req, res) => {
  * - Log system earning breakdown
  */
 exports.transferShortVideoToECart = async (req, res) => {
-  const MAX_RETRIES = 3;
-  let attempt = 0;
-
-  while (attempt < MAX_RETRIES) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const admin = req.user;
-      if (!admin || admin.role !== "admin") {
-        return res.status(403).json({
-          success: false,
-          message: "Unauthorized"
-        });
-      }
-
-      const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } }).session(session);
-
-      if (!users || users.length === 0) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(200).json({
-          success: false,
-          message: "No users with shortVideo balance",
-          data: null
-        });
-      }
-
-      let totalTransferred = 0;
-      let totalLogs = [];
-
-      for (const user of users) {
-        const withdrawalAmount = round2(user.wallets.shortVideoWallet);
-        if (withdrawalAmount <= 0) continue;
-
-        // Deduct full balance from shortVideo wallet
-        user.wallets.shortVideoWallet = 0;
-
-        // Transfer 50% to eCart wallet
-        const transferToECart = round2(withdrawalAmount * 0.5);
-        user.wallets.eCartWallet = round2((user.wallets.eCartWallet || 0) + transferToECart);
-
-        // Wallet transaction log
-        await WalletTransaction.create([{
-          userId: user._id,
-          type: "withdraw",
-          source: "system",
-          fromWallet: "shortVideoWallet",
-          toWallet: "eCartWallet",
-          amount: transferToECart,
-          status: "success",
-          triggeredBy: "system",
-          notes: `User withdrew ₹${withdrawalAmount}. System distributed (Team:14.85% + Network:16% + Admin:10% + Reserve:9.15%) and credited ₹${transferToECart} (50%) into eCart wallet.`
-        }], { session });
-
-        // Save updated user
-        await user.save({ session });
-
-        // Call team & network distributions (outside session to avoid nested writes)
-        try {
-          await distributeTeamWithdrawalEarnings(user._id, withdrawalAmount);
-          await distributeNetworkWithdrawalEarnings(user, withdrawalAmount);
-        } catch (distErr) {
-          console.error(`⚠️ Distribution error for user ${user._id}:`, distErr.message);
-        }
-
-        // Breakdown calculation (for system tracking)
-        const breakdown = {
-          team: round2(withdrawalAmount * 0.1485),
-          network: round2(withdrawalAmount * 0.16),
-          adminCharge: round2(withdrawalAmount * 0.10),
-          reserve: round2(withdrawalAmount * 0.0915),
-          transfer: transferToECart
-        };
-
-        totalTransferred += transferToECart;
-
-        // Create system earning log
-        const log = await SystemEarningLog.create([{
-          amount: withdrawalAmount,
-          type: "outflow",
-          source: "shortVideoToECart",
-          fromUser: user._id,
-          breakdown,
-          context: `Auto-transfer from shortVideo → eCart for user ${user._id}`,
-          status: "success"
-        }], { session });
-
-        totalLogs.push(log);
-      }
-
-      await session.commitTransaction();
-      session.endSession();
-
-      return res.status(200).json({
-        success: true,
-        message: "Funds transferred successfully from shortVideo → eCart",
-        data: {
-          totalUsers: users.length,
-          totalTransferred,
-          logs: totalLogs.length
-        }
-      });
-
-    } catch (err) {
-      await session.abortTransaction();
-      session.endSession();
-
-      // Retry if it's a transient write conflict
-      if (err.code === 112 || (err.errorLabels && err.errorLabels.includes("TransientTransactionError"))) {
-        attempt++;
-        console.warn(`⚠️ WriteConflict detected. Retrying attempt ${attempt}/${MAX_RETRIES}...`);
-        continue;
-      }
-
-      console.error("Transfer Error:", err);
-      return res.status(500).json({
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({
         success: false,
-        message: "Internal Server Error",
-        error: err.message
+        message: "Unauthorized"
       });
     }
-  }
 
-  // If we exhausted retries
-  return res.status(500).json({
-    success: false,
-    message: "Transfer failed after multiple retries due to write conflicts"
-  });
+    const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } });
+    if (!users || users.length === 0) {
+      return res.status(200).json({
+        success: false,
+        message: "No users with shortVideo balance",
+        data: null
+      });
+    }
+
+    let totalTransferred = 0;
+    let totalLogs = 0;
+
+    // process each user independently
+    for (const user of users) {
+      let retries = 0;
+      let success = false;
+
+      while (retries < 3 && !success) {
+        try {
+          // fresh fetch inside retry
+          const freshUser = await User.findById(user._id);
+          const withdrawalAmount = round2(freshUser.wallets.shortVideoWallet);
+          if (withdrawalAmount <= 0) break;
+
+          // calculate transfer
+          const transferToECart = round2(withdrawalAmount * 0.5);
+
+          // atomic update: zero out SV wallet, add to ECART wallet
+          const result = await User.updateOne(
+            { _id: freshUser._id, "wallets.shortVideoWallet": withdrawalAmount },
+            {
+              $set: { "wallets.shortVideoWallet": 0 },
+              $inc: { "wallets.eCartWallet": transferToECart }
+            }
+          );
+
+          if (result.modifiedCount === 0) {
+            retries++;
+            console.warn(`⚠️ Retry ${retries}/3 for user ${user._id} due to concurrent modification`);
+            continue;
+          }
+
+          // log wallet transaction
+          await WalletTransaction.create({
+            userId: freshUser._id,
+            type: "withdraw",
+            source: "system",
+            fromWallet: "shortVideoWallet",
+            toWallet: "eCartWallet",
+            amount: transferToECart,
+            status: "success",
+            triggeredBy: "system",
+            notes: `User withdrew ₹${withdrawalAmount}. System allocated Team:14.85% + Network:16% + Admin:10% + Reserve:9.15%, and credited ₹${transferToECart} (50%) into eCart wallet.`
+          });
+
+          // run team & network distributions
+          try {
+            await distributeTeamWithdrawalEarnings(freshUser._id, withdrawalAmount);
+            await distributeNetworkWithdrawalEarnings(freshUser, withdrawalAmount);
+          } catch (distErr) {
+            console.error(`⚠️ Distribution error for user ${freshUser._id}:`, distErr.message);
+          }
+
+          // system earning log
+          const breakdown = {
+            team: round2(withdrawalAmount * 0.1485),
+            network: round2(withdrawalAmount * 0.16),
+            adminCharge: round2(withdrawalAmount * 0.10),
+            reserve: round2(withdrawalAmount * 0.0915),
+            transfer: transferToECart
+          };
+
+          await SystemEarningLog.create({
+            amount: withdrawalAmount,
+            type: "outflow",
+            source: "shortVideoToECart",
+            fromUser: freshUser._id,
+            breakdown,
+            context: `Auto-transfer from shortVideo → eCart for user ${freshUser._id}`,
+            status: "success"
+          });
+
+          totalTransferred += transferToECart;
+          totalLogs++;
+          success = true;
+        } catch (err) {
+          if (err.code === 112 || (err.errorLabels && err.errorLabels.includes("TransientTransactionError"))) {
+            retries++;
+            console.warn(`⚠️ WriteConflict for user ${user._id}. Retrying ${retries}/3...`);
+            if (retries >= 3) {
+              console.error(`❌ User ${user._id} skipped after 3 retries.`);
+            }
+            continue;
+          } else {
+            console.error(`❌ Error processing user ${user._id}:`, err);
+            break;
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Funds transferred successfully from shortVideo → eCart",
+      data: {
+        totalUsers: users.length,
+        totalTransferred,
+        logs: totalLogs
+      }
+    });
+
+  } catch (err) {
+    console.error("Transfer Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: err.message
+    });
+  }
 };
