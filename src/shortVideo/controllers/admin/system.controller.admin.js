@@ -12,6 +12,7 @@ const Video = require('../../models/Video');
 
 const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTeamWithdrawalEarnings');
 const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
+const { captureLeftoversForWithdrawal } = require('../../helpers/captureLeftovers');
 
 
 exports.getSystemEarningLogs = async (req, res) => {
