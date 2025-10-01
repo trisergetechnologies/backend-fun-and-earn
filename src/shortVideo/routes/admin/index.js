@@ -28,7 +28,7 @@ shortVideoAdminRouter.get('/getpackageswithusercount', getPackagesWithUserCount)
 
 //user reslated
 shortVideoAdminRouter.get('/getcompleteinfo', getCompleteInfo);
-shortVideoAdminRouter.get('/transfershortvideotoecart', transferShortVideoToECart);
+shortVideoAdminRouter.put('/transfershortvideotoecart', transferShortVideoToECart);
 
 
 module.exports = shortVideoAdminRouter

@@ -64,7 +64,7 @@ exports.purchasePackage = async (req, res) => {
     // Assign package and serial
     user.package = selectedPackage._id;
     
-
+    user.isActive = true;
     // Save user
     await user.save({ session });
 
