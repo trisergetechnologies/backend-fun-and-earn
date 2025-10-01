@@ -495,7 +495,7 @@ exports.transferShortVideoToECart = async (req, res) => {
 
           // atomic update: empty SV wallet, credit EC wallet
           const result = await User.updateOne(
-            { _id: freshUser._id, "wallets.shortVideoWallet": withdrawalAmount },
+            { _id: freshUser._id, "wallets.shortVideoWallet": { $gt: 0 } },
             {
               $set: { "wallets.shortVideoWallet": 0 },
               $inc: { "wallets.eCartWallet": transferToECart }
