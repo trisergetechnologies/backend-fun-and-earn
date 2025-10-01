@@ -11,7 +11,7 @@ const Package = require('../../models/Package');
  *
  * Returns distribution summary for leftover tracking
  */
-export const distributeNetworkPurchaseEarnings = async (newUser) => {
+exports.distributeNetworkPurchaseEarnings = async (newUser) => {
   try {
     const allUsers = await User.find({ serialNumber: { $ne: null } })
       .select('_id serialNumber package wallets')
