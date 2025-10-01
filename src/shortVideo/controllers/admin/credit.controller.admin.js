@@ -204,3 +204,62 @@ exports.resetAllWatchTime = async (req, res) => {
     });
   }
 };
+
+
+exports.rechargeShortVideoWallet = async (req, res) => {
+  try {
+    const admin = req.user;
+
+    // Ensure user is an admin
+    if (!admin || admin.role !== 'admin') {
+      return res.status(200).json({ success: false, message: 'Unauthorized', data: null });
+    }
+
+    const { userId, amount } = req.body;
+
+    // Input validation
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(200).json({ success: false, message: 'Invalid or missing user ID', data: null });
+    }
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(200).json({ success: false, message: 'Invalid amount', data: null });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ success: false, message: 'User not found', data: null });
+    }
+
+    // Recharge wallet
+    user.wallets.shortVideoWallet += amount;
+    await user.save();
+
+    // Log wallet transaction (optional, but recommended)
+    await WalletTransaction.create({
+      userId: user._id,
+      type: 'earn',
+      fromWallet: 'shortVideoWallet',
+      source: 'admin',
+      amount,
+      status: 'success',
+      triggeredBy: 'admin',
+      notes: `Admin recharge by ${admin.name}`
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Short video wallet recharged with ₹${amount}`,
+      data: {
+        userId: user._id,
+        name: user.name,
+        newBalance: user.wallets.shortVideoWallet
+      }
+    });
+
+  } catch (err) {
+    console.error('Admin Recharge Error:', err);
+    return res.status(500).json({ success: false, message: 'Internal Server Error', data: null });
+  }
+};
