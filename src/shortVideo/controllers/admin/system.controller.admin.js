@@ -452,6 +452,11 @@ exports.getCompleteInfo = async (req, res) => {
 
 
 
+/**
+ * Auto-transfer of balances:
+ * - Phase 1: Move funds from shortVideo → eCart (50%) and record snapshots
+ * - Phase 2: Run distribution + leftover capture based on snapshots
+ */
 exports.transferShortVideoToECart = async (req, res) => {
   try {
     const admin = req.user;
@@ -462,7 +467,7 @@ exports.transferShortVideoToECart = async (req, res) => {
       });
     }
 
-    // Phase 1: Sweep all users
+    // Phase 1: Sweep all users with balance
     const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } });
     if (!users || users.length === 0) {
       return res.status(200).json({
@@ -472,7 +477,7 @@ exports.transferShortVideoToECart = async (req, res) => {
       });
     }
 
-    let snapshots = []; // keep { userId, withdrawalAmount, transferToECart }
+    const snapshots = []; // store { userId, withdrawalAmount }
     let totalTransferred = 0;
     let totalLogs = 0;
 
@@ -482,13 +487,13 @@ exports.transferShortVideoToECart = async (req, res) => {
 
       while (retries < 3 && !success) {
         try {
-          const freshUser = await User.findById(user._id);
+          const freshUser = await User.findById(user._id).lean();
           const withdrawalAmount = round2(freshUser.wallets.shortVideoWallet);
           if (withdrawalAmount <= 0) break;
 
           const transferToECart = round2(withdrawalAmount * 0.5);
 
-          // atomic update
+          // atomic update: empty SV wallet, credit EC wallet
           const result = await User.updateOne(
             { _id: freshUser._id, "wallets.shortVideoWallet": withdrawalAmount },
             {
@@ -503,7 +508,7 @@ exports.transferShortVideoToECart = async (req, res) => {
             continue;
           }
 
-          // log wallet transaction
+          // Wallet transaction log
           await WalletTransaction.create({
             userId: freshUser._id,
             type: "withdraw",
@@ -516,26 +521,19 @@ exports.transferShortVideoToECart = async (req, res) => {
             notes: `Auto-transfer: User had ₹${withdrawalAmount}, system credited ₹${transferToECart} (50%) to eCart and allocated rest for distributions.`
           });
 
-          // system earning log (transfer part only)
-          const breakdown = {
-            transfer: transferToECart
-          };
-
+          // System earning log (transfer portion only)
           await SystemEarningLog.create({
             amount: withdrawalAmount,
             type: "outflow",
             source: "shortVideoToECart",
             fromUser: freshUser._id,
-            breakdown,
+            breakdown: { transfer: transferToECart },
             context: `Snapshot withdrawal for user ${freshUser._id}`,
             status: "success"
           });
 
-          // save snapshot for Phase 2
-          snapshots.push({
-            userId: freshUser._id,
-            withdrawalAmount
-          });
+          // Save snapshot for Phase 2
+          snapshots.push({ userId: freshUser._id, withdrawalAmount });
 
           totalTransferred += transferToECart;
           totalLogs++;
@@ -557,14 +555,17 @@ exports.transferShortVideoToECart = async (req, res) => {
     }
 
     // Phase 2: Run distributions + leftovers
+    let distributionsRun = 0;
     for (const snap of snapshots) {
       try {
         const result1 = await distributeTeamWithdrawalEarnings(snap.userId, snap.withdrawalAmount);
-        await captureLeftovers(result1);
+        if (result1) await captureLeftovers(result1);
 
-        const freshUser = await User.findById(snap.userId); // needed because network takes full user
+        const freshUser = await User.findById(snap.userId).lean(); // needed for network range
         const result2 = await distributeNetworkWithdrawalEarnings(freshUser, snap.withdrawalAmount);
-        await captureLeftovers(result2);
+        if (result2) await captureLeftovers(result2);
+
+        distributionsRun++;
       } catch (distErr) {
         console.error(`⚠️ Distribution error for user ${snap.userId}:`, distErr.message);
       }
@@ -576,8 +577,9 @@ exports.transferShortVideoToECart = async (req, res) => {
       data: {
         totalUsers: users.length,
         totalTransferred,
-        logs: totalLogs,
-        distributions: snapshots.length
+        transferLogs: totalLogs,
+        distributions: distributionsRun,
+        skippedUsers: users.length - snapshots.length
       }
     });
 
