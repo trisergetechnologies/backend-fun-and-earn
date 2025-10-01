@@ -1,6 +1,7 @@
 const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
 const EarningLog = require("../../models/EarningLog");
+const mongoose = require('mongoose');
 
 // 10 hours = 36000 seconds
 const WATCH_TIME_THRESHOLD = 10 * 3600;

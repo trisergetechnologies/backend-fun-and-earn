@@ -1,3 +1,7 @@
+const User = require('../../models/User');
+const EarningLog = require('../models/EarningLog');
+const Package = require('../../models/Package');
+
 /**
  * Network Purchase Distribution
  * - Only uplines (above buyer) earn
