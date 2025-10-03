@@ -592,3 +592,9 @@ exports.transferShortVideoToECart = async (req, res) => {
     });
   }
 };
+
+
+exports.adminSystemHealth = (req, res)=>{
+  console.log("cron job silly");
+  return res.status(200).json({success: true});
+}
