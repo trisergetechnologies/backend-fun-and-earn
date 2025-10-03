@@ -4,11 +4,11 @@ const { default: axios } = require('axios');
 require('dotenv').config();
 
 
-cron.schedule('43 0 * * *', async () => {
+cron.schedule('46 0 * * *', async () => {
   try {
     console.log('📡 Running cron job at 6:00 AM IST');
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL
-
+    console.log(ADMIN_EMAIL);
     const admin = await User.findOne({email: ADMIN_EMAIL});
     // const URL = 'https://amp-api.mpdreams.in/api/v1/shortvideo/admin/transfershortvideotoecart';
     const token = admin?.token;
