@@ -1,10 +1,10 @@
 const cron = require('node-cron');
-const User = ('../models/User');
+const User = require('../models/User');
 const { default: axios } = require('axios');
 require('dotenv').config();
 
 
-cron.schedule('46 0 * * *', async () => {
+cron.schedule('54 0 * * *', async () => {
   try {
     console.log('📡 Running cron job at 6:00 AM IST');
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL
