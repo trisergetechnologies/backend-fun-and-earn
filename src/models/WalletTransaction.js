@@ -10,7 +10,7 @@ const WalletTransactionSchema = new mongoose.Schema({
   // Type of transaction
   type: {
     type: String,
-    enum: ['earn', 'spend', 'transfer', 'withdraw'],
+    enum: ['earn', 'spend', 'transfer', 'withdraw', 'transferredToBank'],
     required: true
   },
 

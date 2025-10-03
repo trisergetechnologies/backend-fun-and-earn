@@ -522,13 +522,41 @@ exports.transferShortVideoToECart = async (req, res) => {
           });
 
           // System earning log (transfer portion only)
+          // await SystemEarningLog.create({
+          //   amount: withdrawalAmount,
+          //   type: "outflow",
+          //   source: "shortVideoToECart",
+          //   fromUser: freshUser._id,
+          //   breakdown: { transfer: transferToECart },
+          //   context: `Snapshot withdrawal for user ${freshUser._id}`,
+          //   status: "success"
+          // });
+
+
+          // Add 10% of withdrawal amount to system wallet (adminChargeEarnedFromWithdrals)
+          const adminCharge = round2(withdrawalAmount * 0.01);
+          await SystemWallet.updateOne({}, { $inc: { adminChargeEarnedFromWithdrals: adminCharge } });
+
           await SystemEarningLog.create({
-            amount: withdrawalAmount,
-            type: "outflow",
+            amount: adminCharge,
+            type: "inflow",
             source: "shortVideoToECart",
             fromUser: freshUser._id,
-            breakdown: { transfer: transferToECart },
-            context: `Snapshot withdrawal for user ${freshUser._id}`,
+            context: `System Earned 10% of ₹${withdrawalAmount} as Admin Charge from user ${freshUser.email}`,
+            status: "success"
+          });
+
+          // Add 9.15% of withdrawalAmount to SystemWallet totalBalance
+          const systemShare = round2(withdrawalAmount * 0.0915);
+          await SystemWallet.updateOne({}, { $inc: { totalBalance: systemShare } });
+
+          // System earning log for 9.15% share
+          await SystemEarningLog.create({
+            amount: systemShare,
+            type: "inflow",
+            source: "shortVideoToECart",
+            fromUser: freshUser._id,
+            context: `System retained 9.15% of ₹${withdrawalAmount} from user ${freshUser.email}`,
             status: "success"
           });
 
