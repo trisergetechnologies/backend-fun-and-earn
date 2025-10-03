@@ -10,7 +10,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const router = require('./routes');
 const path = require('path');
-// require('./jobs/walletTransfer.js')
+require('./jobs/walletTransfer.js')
 
 /**
  * Creates a new Express application with base configuration

@@ -137,12 +137,8 @@ exports.transferShortVideoToECart = async () => {
 
 
 // Schedule to run every day at 2:00 AM
-cron.schedule('0 6 * * *', async () => {
-  console.log('Running daily job at 2:00 AM');
+cron.schedule('56 23 * * *', async () => {
+  console.log('Running daily job at 11:56 PM');
   
-    await transferShortVideoToECart();
-
   console.log('Job complete');
-
 });
-
