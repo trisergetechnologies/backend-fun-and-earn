@@ -136,7 +136,8 @@ exports.transferShortVideoToECart = async () => {
 
 
 
-cron.schedule('7 0 * * *', async () => {
-  console.log('Running daily job at 12:07 AM');
-  console.log('Job complete');
+cron.schedule('11 0 * * *', () => {
+  console.log('✅ Cron running at 12:07 AM IST');
+}, {
+  timezone: 'Asia/Kolkata'
 });
