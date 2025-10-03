@@ -1,7 +1,7 @@
-import cron from 'node-cron';
-import User from '../models/User';
-import WalletTransaction from '../models/WalletTransaction';
-import SystemEarningLog from '../models/SystemEarningLog';
+const cron = require('node-cron');
+const User = ('../models/User');
+const WalletTransaction = require('../models/WalletTransaction');
+const SystemEarningLog = ('../models/SystemEarningLog');
 
 
 
@@ -136,9 +136,7 @@ exports.transferShortVideoToECart = async () => {
 
 
 
-// Schedule to run every day at 2:00 AM
-cron.schedule('56 23 * * *', async () => {
-  console.log('Running daily job at 11:56 PM');
-  
+cron.schedule('7 0 * * *', async () => {
+  console.log('Running daily job at 12:07 AM');
   console.log('Job complete');
 });
