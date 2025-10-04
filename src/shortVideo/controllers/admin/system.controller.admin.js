@@ -626,41 +626,41 @@ exports.rechargeSystemWallet = async (req, res) => {
   try {
     const { amount, context } = req.body;
 
-    // // Basic validation
-    // if (!amount || typeof amount !== 'number' || amount <= 0) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid amount. Must be a positive number.",
-    //     data: null
-    //   });
-    // }
+    // Basic validation
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount. Must be a positive number.",
+        data: null
+      });
+    }
 
-    // const systemWallet = await SystemWallet.findOneAndUpdate(
-    //   {},
-    //   { $inc: { totalBalance: amount } },
-    //   { new: true, upsert: true }
-    // );
+    const systemWallet = await SystemWallet.findOneAndUpdate(
+      {},
+      { $inc: { totalBalance: amount } },
+      { new: true, upsert: true }
+    );
 
-    // // Create a log
-    // const log = new SystemEarningLog({
-    //   amount,
-    //   type: 'inflow',
-    //   source: 'topUp',
-    //   context,
-    //   status: 'success'
-    // });
+    // Create a log
+    const log = new SystemEarningLog({
+      amount,
+      type: 'inflow',
+      source: 'topUp',
+      context,
+      status: 'success'
+    });
 
-    // await log.save();
+    await log.save();
 
     return res.status(200).json({
       success: true,
       message: `System wallet recharged successfully with ₹${amount}`,
-      // data: {
-      //   wallet: {
-      //     totalBalance: systemWallet.totalBalance,
-      //   },
-      //   logId: log._id
-      // }
+      data: {
+        wallet: {
+          totalBalance: systemWallet.totalBalance,
+        },
+        logId: log._id
+      }
     });
 
   } catch (error) {
