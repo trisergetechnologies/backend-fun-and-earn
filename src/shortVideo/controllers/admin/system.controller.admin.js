@@ -18,7 +18,7 @@ const { captureLeftovers } = require('../../helpers/captureLeftovers');
 
 exports.getSystemEarningLogs = async (req, res) => {
   try {
-    const { limit = 20, page = 1 } = req.query;
+    const { limit = 50, page = 1 } = req.query;
 
     const logs = await SystemEarningLog.find({})
       .sort({ createdAt: -1 })
