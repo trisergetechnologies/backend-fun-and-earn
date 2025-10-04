@@ -622,6 +622,61 @@ exports.transferShortVideoToECart = async (req, res) => {
 };
 
 
+exports.rechargeSystemWallet = async (req, res) => {
+  try {
+    const { amount, context } = req.body;
+
+    // Basic validation
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount. Must be a positive number.",
+        data: null
+      });
+    }
+
+    const systemWallet = await SystemWallet.findOneAndUpdate(
+      {},
+      { $inc: { totalBalance: amount } },
+      { new: true, upsert: true }
+    );
+
+    // Create a log
+    const log = new SystemEarningLog({
+      amount,
+      type: 'inflow',
+      source: 'topUp',
+      context,
+      status: 'success'
+    });
+
+    await log.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `System wallet recharged successfully with ₹${amount}`,
+      data: {
+        wallet: {
+          totalBalance: systemWallet.totalBalance,
+        },
+        logId: log._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Recharge Error:', error);
+
+    return res.status(400).json({
+      success: false,
+      message: 'Something went wrong while recharging the system wallet.',
+      data: null
+    });
+  }
+};
+
+
+
+
 exports.adminSystemHealth = (req, res)=>{
   console.log("cron job silly");
   return res.status(200).json({success: true});

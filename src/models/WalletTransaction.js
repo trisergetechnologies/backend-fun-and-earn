@@ -55,6 +55,11 @@ const WalletTransactionSchema = new mongoose.Schema({
     enum: ['user', 'system', 'admin'],
     default: 'system'
   },
+  
+  tax:{
+    type: Number,
+    default: 0
+  },
 
   // Extra information (e.g. for UPI reference or coupon note)
   notes: {

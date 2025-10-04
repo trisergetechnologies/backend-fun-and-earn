@@ -21,7 +21,8 @@ const SystemEarningLogSchema = new mongoose.Schema({
       'adminAdjustment',
       'shortVideoToECart',  // new: SV → ECART transfer
       'userWithdrawal',     // new: ECART → Bank payout
-      'rewardReserve'       // new: Reserve usage for payouts/giveaways
+      'rewardReserve',       // new: Reserve usage for payouts/giveaways
+      'topUp'
     ],
     required: true
   },
