@@ -17,7 +17,7 @@ shortVideoAdminRouter.put('/creditwatchtimeearnings',creditWatchTimeEarnings);
 shortVideoAdminRouter.put('/resetallwatchtime', resetAllWatchTime);
 
 //system wallet and weekly/monthly rewards
-shortVideoAdminRouter.put('rechargesystemwallet', rechargeSystemWallet);
+shortVideoAdminRouter.put('/rechargesystemwallet', rechargeSystemWallet);
 shortVideoAdminRouter.get('/getsystemwallet', getSystemWallet);
 shortVideoAdminRouter.get('/getsystemearninglogs', getSystemEarningLogs);
 shortVideoAdminRouter.put('/transferfundstopool', transferFundsToPool);
