@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const SystemEarningLog = require('../../../models/SystemEarningLog');
 const SystemWallet = require('../../../models/SystemWallet');
 const Achievement = require("../../../models/Achievement");
+const MonthlyAchievement = require("../../../models/MonthlyAchievement");
 const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
 const Package = require('../../../models/Package');
@@ -293,6 +294,177 @@ exports.payoutWeeklyRewards = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal Server Error', data: null });
   }
 };
+
+
+
+/**
+ * Distribute monthly reward pool among achievers.
+ * - Pool source: SystemWallet.monthlyPool
+ * - Split equally among 10 levels (1–10)
+ * - Each level’s share is divided equally among achievers at that level
+ * - Unused or remainder funds return to SystemWallet.totalBalance
+ */
+exports.payoutMonthlyRewards = async (req, res) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access"
+      });
+    }
+
+    // Ensure wallet exists
+    let wallet = await SystemWallet.findOne();
+    if (!wallet) wallet = await new SystemWallet().save();
+
+    if (!wallet.monthlyPool || wallet.monthlyPool <= 0) {
+      return res.status(200).json({
+        success: false,
+        message: "No funds in monthly reward pool",
+        data: null
+      });
+    }
+
+    const poolAmount = round2(wallet.monthlyPool);
+    const perLevel = round2(poolAmount / 10);
+
+    let totalPaid = 0;
+    let totalReturned = 0;
+
+    // Loop through all 10 achievement levels
+    for (let level = 1; level <= 10; level++) {
+      try {
+        const achievers = await MonthlyAchievement.find({ level })
+          .populate("userId")
+          .lean();
+
+        if (!achievers || achievers.length === 0) {
+          // No achievers — return full bucket to totalBalance
+          wallet.totalBalance = round2((wallet.totalBalance || 0) + perLevel);
+          totalReturned = round2(totalReturned + perLevel);
+
+          await SystemEarningLog.create({
+            amount: perLevel,
+            type: "inflow",
+            source: "monthlyPayout",
+            context: `Unused funds returned from level ${level}`,
+            status: "success"
+          });
+          continue;
+        }
+
+        const count = achievers.length;
+        const share = round2(perLevel / count);
+        const sumPaidForLevel = round2(share * count);
+        const remainder = round2(perLevel - sumPaidForLevel);
+
+        // Return any rounding remainder
+        if (remainder > 0) {
+          wallet.totalBalance = round2((wallet.totalBalance || 0) + remainder);
+          totalReturned = round2(totalReturned + remainder);
+
+          await SystemEarningLog.create({
+            amount: remainder,
+            type: "inflow",
+            source: "monthlyPayout",
+            context: `Rounding remainder returned from level ${level}`,
+            status: "success"
+          });
+        }
+
+        const bulkUserOps = [];
+        const txDocs = [];
+
+        for (const ach of achievers) {
+          const usr = ach.userId;
+          if (!usr || !usr._id) {
+            // User missing — return their share to system
+            wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
+            totalReturned = round2(totalReturned + share);
+            await SystemEarningLog.create({
+              amount: share,
+              type: "inflow",
+              source: "monthlyPayout",
+              context: `User missing for level ${level}, returned share`,
+              status: "success"
+            });
+            continue;
+          }
+
+          // Add user wallet increment
+          bulkUserOps.push({
+            updateOne: {
+              filter: { _id: usr._id },
+              update: { $inc: { "wallets.shortVideoWallet": share } }
+            }
+          });
+
+          // Log earning
+          txDocs.push({
+            userId: usr._id,
+            amount: share,
+            source: "monthlyReward",
+            fromUser: admin._id,
+            context: `Achievement Level ${level} - ${ach.title}`,
+            triggeredBy: "admin",
+            notes: `Monthly reward: ${ach.title}`,
+            status: "success"
+          });
+        }
+
+        // Apply bulk updates
+        if (bulkUserOps.length > 0) {
+          await User.bulkWrite(bulkUserOps);
+        }
+
+        if (txDocs.length > 0) {
+          await EarningLog.insertMany(txDocs);
+        }
+
+        totalPaid = round2(totalPaid + sumPaidForLevel);
+
+      } catch (levelErr) {
+        console.error(`❌ Error processing monthly level ${level}:`, levelErr);
+        // continue to next level
+      }
+    }
+
+    // Empty the monthly pool after payout
+    wallet.monthlyPool = 0;
+    await wallet.save();
+
+    // Log summary
+    await SystemEarningLog.create({
+      amount: totalPaid,
+      type: "outflow",
+      source: "monthlyPayout",
+      fromUser: admin._id,
+      context: `Monthly payout completed. totalPaid=${totalPaid}, totalReturned=${totalReturned}`,
+      status: "success"
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Monthly rewards distributed successfully",
+      data: {
+        totalPaid,
+        totalReturned,
+        remainingBalance: wallet.totalBalance,
+        poolAfterReset: wallet.monthlyPool
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ payoutMonthlyRewards Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: err.message
+    });
+  }
+};
+
 
 
 
