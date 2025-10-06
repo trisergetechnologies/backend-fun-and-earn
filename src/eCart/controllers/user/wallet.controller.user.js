@@ -22,7 +22,9 @@ exports.getWallet = async (req, res) => {
       success: true,
       message: 'E-Cart wallet balance fetched',
       data: {
-        eCartWallet: user.wallets.eCartWallet,
+        eCartWallet: typeof user.wallets?.eCartWallet === 'number'
+          ? Number(user.wallets.eCartWallet.toFixed(2))
+          : 0,
       }
     });
 

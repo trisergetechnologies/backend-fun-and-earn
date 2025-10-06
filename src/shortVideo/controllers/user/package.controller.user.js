@@ -3,11 +3,12 @@ const User = require('../../../models/User');
 const Package = require('../../../models/Package');
 const { distributeTeamPurchaseEarnings } = require('../../helpers/distributeTeamPurchaseEarnings');
 const { distributeNetworkPurchaseEarnings } = require('../../helpers/distributeNetworkPurchaseEarnings');
-const WalletTransaction = require('../../../models/WalletTransaction');
+// const WalletTransaction = require('../../../models/WalletTransaction');
 const { checkAndAssignAchievements } = require('../../helpers/checkAndAssignAchievements');
 
 const Achievement = require('../../../models/Achievement');
 const { captureLeftovers } = require('../../helpers/captureLeftovers');
+const PackageOrder = require('../../../models/PackageOrder');
 
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
@@ -68,14 +69,23 @@ exports.purchasePackage = async (req, res) => {
     // Save user
     await user.save({ session });
 
-    // Log wallet transaction
-    await new WalletTransaction({
-      userId: user._id,
-      type: 'spend',
-      source: 'purchase',
-      fromWallet: 'shortVideoWallet',
+    await new PackageOrder({
+      buyerId: user._id,
+      packageId: selectedPackage._id,
+
+      packageSnapshot: {
+        name: selectedPackage.name,
+        price: selectedPackage.price,
+        membersUpto: selectedPackage.membersUpto,
+        description: selectedPackage.description || '',
+        color: selectedPackage.color || '',
+        icon: selectedPackage.icon || ''
+      },
+
+      source: 'user',               // because user initiated purchase
+      fromWallet: 'shortVideoWallet', // matches the wallet deducted from
       amount: selectedPackage.price,
-      status: 'success',
+      status: 'success',            // since transaction succeeded here
       triggeredBy: 'user',
       notes: `Purchased ${selectedPackage.name} package`
     }).save({ session });
@@ -284,3 +294,26 @@ exports.getMyAchievement = async (req, res) => {
   }
 };
 
+
+exports.getPackageOrders = async (req, res) => {
+  try {
+    const userId = req.user._id; // assuming auth middleware sets req.user
+
+    const orders = await PackageOrder.find({ buyerId: userId })
+      .populate('packageId', 'name price') // populate package info only
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      message: '',
+      data: orders
+    });
+  } catch (err) {
+    console.error('Get User Package Orders Error:', err);
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'Failed to get package orders',
+      data: null
+    });
+  }
+};
