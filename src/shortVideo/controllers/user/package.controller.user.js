@@ -297,7 +297,7 @@ exports.getMyAchievement = async (req, res) => {
 };
 
 
-exports.MONTHLY_ACHIEVEMENTS = {
+const MONTHLY_ACHIEVEMENTS = {
   1: { title: "Ruby Star", threshold: 10 },
   2: { title: "Pearl Star", threshold: 50 },
   3: { title: "Bronze Star", threshold: 250 },
