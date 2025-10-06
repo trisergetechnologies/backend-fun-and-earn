@@ -15,14 +15,13 @@ const EarningLogSchema = new mongoose.Schema({
 
   source: {
     type: String,
-    enum: ['teamPurchase', 'networkPurchase', 'teamWithdrawal', 'networkWithdrawal', 'watchTime'],
+    enum: ['teamPurchase', 'networkPurchase', 'teamWithdrawal', 'networkWithdrawal', 'watchTime', 'weeklyReward', 'monthlyReward'],
     required: true
   },
 
   fromUser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
   },
 
   context: {

@@ -228,15 +228,26 @@ exports.payoutWeeklyRewards = async (req, res) => {
             }
           });
 
+          // txDocs.push({
+          //   userId: usr._id,
+          //   type: 'earn',
+          //   source: 'system',
+          //   fromWallet: 'shortVideoWallet',
+          //   amount: share,
+          //   status: 'success',
+          //   triggeredBy: 'system',
+          //   notes: `Weekly reward: ${ach.title}`
+          // });
+
           txDocs.push({
             userId: usr._id,
-            type: 'earn',
-            source: 'system',
-            fromWallet: 'shortVideoWallet',
             amount: share,
-            status: 'success',
-            triggeredBy: 'system',
-            notes: `Weekly reward: ${ach.title}`
+            source: 'weeklyReward',
+            fromUser: admin._id,
+            context: `Achievement Level ${level} - ${ach.title}`,
+            triggeredBy: 'admin',
+            notes: `Weekly reward: ${ach.title}`,
+            status: 'success'
           });
         }
 
@@ -245,7 +256,8 @@ exports.payoutWeeklyRewards = async (req, res) => {
           await User.bulkWrite(bulkUserOps);
         }
         if (txDocs.length > 0) {
-          await WalletTransaction.insertMany(txDocs);
+          // await WalletTransaction.insertMany(txDocs);
+          await EarningLog.insertMany(txDocs);
         }
 
         totalPaid = round2(totalPaid + sumPaidForLevel);
