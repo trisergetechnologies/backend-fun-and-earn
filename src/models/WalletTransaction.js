@@ -10,7 +10,7 @@ const WalletTransactionSchema = new mongoose.Schema({
   // Type of transaction
   type: {
     type: String,
-    enum: ['earn', 'spend', 'transfer', 'withdraw', 'transferredToBank'],
+    enum: ['earn', 'spend', 'transfer', 'withdraw', 'transferToBank'],
     required: true
   },
 
@@ -35,11 +35,27 @@ const WalletTransactionSchema = new mongoose.Schema({
     default: null
   },
 
+
+
   // Amount of the transaction (can be zero for coupons or metadata)
   amount: {
     type: Number,
     required: true,
     min: 0
+  },
+
+  payoutAmount: {
+    type: Number
+  },
+
+  tdsAmount: {
+    type: Number,
+    default: 0
+  },
+
+  linkedWithdrawalRequestId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'WithdrawalRequest'
   },
 
   // Status of transaction (for async payouts or delayed processing)
@@ -54,11 +70,6 @@ const WalletTransactionSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'system', 'admin'],
     default: 'system'
-  },
-  
-  tax:{
-    type: Number,
-    default: 0
   },
 
   // Extra information (e.g. for UPI reference or coupon note)

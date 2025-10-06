@@ -4,6 +4,7 @@ const WalletTransaction = require("../../../models/WalletTransaction");
 const { distributeTeamWithdrawalEarnings } = require('../../../shortVideo/helpers/distributeTeamWithdrawalEarnings');
 const { distributeNetworkWithdrawalEarnings } = require('../../../shortVideo/helpers/distributeNetworkWithdrawalEarnings');
 const Coupon = require('../../../models/Coupon');
+const WithdrawalRequest = require('../../models/WithdrawalRequest');
 
 exports.getWallet = async (req, res) => {
   const userId = req.user._id;
@@ -223,6 +224,128 @@ exports.redeemCoupon = async (req, res) => {
       success: false,
       message: 'Server error',
       data: null
+    });
+  }
+};
+
+
+function round2(value) {
+  if (isNaN(value) || value === null) return 0;
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * 🧾 1️⃣ requestWithdrawal
+ * User requests withdrawal from their eCartWallet.
+ * - Validates user bank details and balance.
+ * - Checks if a pending withdrawal already exists.
+ * - Calculates TDS (5% of amount).
+ * - Creates WithdrawalRequest + WalletTransaction.
+ */
+
+exports.requestWithdrawal = async (req, res) => {
+  try {
+    const user = req.user;
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(200).json({
+        success: false,
+        message: "Invalid withdrawal amount",
+        data: null
+      });
+    }
+
+    // Check for pending withdrawal
+    const pendingReq = await WithdrawalRequest.findOne({
+      user: user._id,
+      status: "pending"
+    });
+
+    if (pendingReq) {
+      return res.status(200).json({
+        success: false,
+        message: "You already have a pending withdrawal request",
+        data: null
+      });
+    }
+
+    // Fetch fresh user details
+    const freshUser = await User.findById(user._id).lean();
+    const balance = round2(freshUser.wallets.eCartWallet || 0);
+
+    if (balance < amount) {
+      return res.status(200).json({
+        success: false,
+        message: "Insufficient balance",
+        data: { balance }
+      });
+    }
+
+    // Check for bank details
+    const bank = freshUser?.eCartProfile?.bankDetails;
+    if (!bank || !bank.accountNumber || !bank.ifscCode || !bank.accountHolderName) {
+      return res.status(200).json({
+        success: false,
+        message: "Bank details missing. Please update your UPI or bank details.",
+        data: null
+      });
+    }
+
+    // Calculate TDS and payout
+    const tdsAmount = round2(amount * 0.05); // 5% of withdrawal amount
+    const payoutAmount = round2(amount - tdsAmount);
+
+    // Create withdrawal request
+    const withdrawalReq = await WithdrawalRequest.create({
+      user: user._id,
+      walletType: "eCartWallet",
+      amount,
+      tdsAmount,
+      payoutAmount,
+      bankDetailsSnapshot: {
+        accountHolderName: bank.accountHolderName,
+        accountNumber: bank.accountNumber,
+        ifscCode: bank.ifscCode,
+        upiId: bank.upiId || ""
+      },
+      status: "pending"
+    });
+
+    // Create wallet transaction
+    const walletTx = await WalletTransaction.create({
+      userId: user._id,
+      type: "transferToBank",
+      source: "manual",
+      fromWallet: "eCartWallet",
+      amount,
+      payoutAmount,
+      tdsAmount,
+      linkedWithdrawalRequestId: withdrawalReq._id,
+      status: "pending",
+      triggeredBy: "user",
+      notes: `Withdrawal request of ₹${amount} initiated. After TDS, payout will be ₹${payoutAmount}.`
+    });
+
+    // Link both
+    withdrawalReq.walletTransactionId = walletTx._id;
+    await withdrawalReq.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Withdrawal request submitted successfully",
+      data: {
+        withdrawalRequest: withdrawalReq,
+        walletTransaction: walletTx
+      }
+    });
+
+  } catch (err) {
+    console.error("Error in requestWithdrawal:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: err.message
     });
   }
 };
