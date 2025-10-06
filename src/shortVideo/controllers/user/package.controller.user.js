@@ -297,6 +297,149 @@ exports.getMyAchievement = async (req, res) => {
 };
 
 
+exports.MONTHLY_ACHIEVEMENTS = {
+  1: { title: "Ruby Star", threshold: 10 },
+  2: { title: "Pearl Star", threshold: 50 },
+  3: { title: "Bronze Star", threshold: 250 },
+  4: { title: "Silver Star", threshold: 750 },
+  5: { title: "Gold Star", threshold: 2500 },
+  6: { title: "Platinum Star", threshold: 12500 },
+  7: { title: "Diamond Star", threshold: 49999 },
+  8: { title: "Master's Star", threshold: 109999 },
+  9: { title: "Grand Master's Star", threshold: 499999 },
+  10: { title: "F&E Legend", threshold: 2399999 },
+};
+
+
+async function countActiveMembersAtDepthMonthly(user, depth) {
+  if (!user || depth <= 0) return 0;
+
+  let currentLevelUsers = [user];
+  let nextLevelUsers = [];
+
+  for (let i = 0; i < depth; i++) {
+    const referralCodes = currentLevelUsers
+      .map((u) => u.referralCode)
+      .filter(Boolean);
+
+    if (referralCodes.length === 0) return 0;
+
+    nextLevelUsers = await User.find({
+      referredBy: { $in: referralCodes },
+      package: { $ne: null },
+    }).select("_id referralCode package");
+
+    currentLevelUsers = nextLevelUsers;
+  }
+
+  return currentLevelUsers.length;
+}
+
+/**
+ * 🎖️ Controller: getMyMonthlyAchievement
+ * Returns user’s full monthly achievement summary with all levels
+ */
+exports.getMyMonthlyAchievement = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+        data: null,
+      });
+    }
+
+    // Fetch latest user with referral details
+    const freshUser = await User.findById(user._id).lean();
+    if (!freshUser) {
+      return res.status(200).json({
+        success: false,
+        message: "User not found",
+        data: null,
+      });
+    }
+
+    const levels = [];
+    let currentPosition = null;
+    let unlockedCount = 0;
+
+    // Loop through 1..10 achievement levels
+    const keys = Object.keys(MONTHLY_ACHIEVEMENTS)
+      .map((k) => Number(k))
+      .sort((a, b) => a - b);
+
+    for (const levelKey of keys) {
+      const { title, threshold } = MONTHLY_ACHIEVEMENTS[levelKey];
+      const userCount = await countActiveMembersAtDepthMonthly(freshUser, levelKey);
+
+      const achieved = userCount >= threshold;
+
+      let status = "Locked";
+      if (achieved) {
+        unlockedCount++;
+        currentPosition = title;
+        status = "Achieved";
+      }
+
+      levels.push({
+        position: title,
+        threshold,
+        userCount,
+        status,
+        isCurrent: false, // will mark below
+      });
+    }
+
+    // Mark the latest achieved as current
+    if (currentPosition) {
+      const idx = levels.findIndex((l) => l.position === currentPosition);
+      if (idx !== -1) levels[idx].isCurrent = true;
+      if (levels[idx]) levels[idx].status = "Current";
+    }
+
+    // Total active members = count of latest level (or sum)
+    const totalActiveMembers = levels.reduce(
+      (sum, lvl) => sum + (lvl.userCount || 0),
+      0
+    );
+
+    // Find next locked level
+    const nextLevel = levels.find((lvl) => lvl.status === "Locked");
+    let nextLevelData = null;
+    if (nextLevel) {
+      nextLevelData = {
+        position: nextLevel.position,
+        threshold: nextLevel.threshold,
+        userCount: nextLevel.userCount,
+        needed: Math.max(nextLevel.threshold - nextLevel.userCount, 0),
+      };
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Monthly achievements fetched successfully",
+      data: {
+        achievements: {
+          currentPosition: currentPosition || "No Achievements Yet",
+          totalActiveMembers,
+          unlockedCount,
+          levels,
+          nextLevel: nextLevelData,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("❌ Error in getMyMonthlyAchievement:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      data: null,
+    });
+  }
+};
+
+
 exports.getPackageOrders = async (req, res) => {
   try {
     const userId = req.user._id; // assuming auth middleware sets req.user
