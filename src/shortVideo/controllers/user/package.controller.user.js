@@ -9,6 +9,7 @@ const { checkAndAssignAchievements } = require('../../helpers/checkAndAssignAchi
 const Achievement = require('../../../models/Achievement');
 const { captureLeftovers } = require('../../helpers/captureLeftovers');
 const PackageOrder = require('../../../models/PackageOrder');
+const { checkAndAssignMonthlyAchievements } = require('../../helpers/checkAndAssignMonthlyAchievements');
 
 exports.purchasePackage = async (req, res) => {
   const session = await mongoose.startSession();
@@ -104,6 +105,7 @@ exports.purchasePackage = async (req, res) => {
     await captureLeftovers(result2);
 
     await checkAndAssignAchievements(user);
+    await checkAndAssignMonthlyAchievements(user);
 
 
 
