@@ -3,6 +3,7 @@ const { getTeam, getNetwork } = require('../../controllers/admin/tree.controller
 const { getUsersWithWatchTime, creditWatchTimeEarnings, resetAllWatchTime, rechargeShortVideoWallet } = require('../../controllers/admin/credit.controller.admin');
 const { getSystemWallet, getSystemEarningLogs, transferFundsToPool, payoutWeeklyRewards, getCompleteInfo, transferShortVideoToECart, adminSystemHealth, rechargeSystemWallet, payoutMonthlyRewards } = require('../../controllers/admin/system.controller.admin');
 const { getPackagesWithUserCount } = require('../../controllers/admin/package.controller.admin');
+const { adminEcartActivate } = require('../../controllers/admin/user.controller.admin');
 
 const shortVideoAdminRouter = Express.Router();
 
@@ -32,6 +33,7 @@ shortVideoAdminRouter.get('/getpackageswithusercount', getPackagesWithUserCount)
 shortVideoAdminRouter.get('/getcompleteinfo', getCompleteInfo);
 shortVideoAdminRouter.put('/transfershortvideotoecart', transferShortVideoToECart);
 shortVideoAdminRouter.put('/rechargeshortvideowallet', rechargeShortVideoWallet);
+shortVideoAdminRouter.put('/adminecartactivate', adminEcartActivate);
 
 shortVideoAdminRouter.get('/health-check', adminSystemHealth);
 
