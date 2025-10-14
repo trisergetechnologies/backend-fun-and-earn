@@ -67,7 +67,7 @@ exports.logWatchTime = async (req, res) => {
     // Safely process watchedDuration into an integer
     const duration = Math.floor(Number(watchedDuration));
 
-    console.log("videoId", videoId, "watch dur:  ", duration);
+    // console.log("videoId", videoId, "watch dur:  ", duration);
 
     if (!videoId || isNaN(duration) || duration <= 0 || duration > 60) {
       return res.status(200).json({
