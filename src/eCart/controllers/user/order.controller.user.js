@@ -406,7 +406,7 @@ exports.createOrderIntent = async (req, res) => {
         // Razorpay order creation failed — perform compensating rollback:
         // (1) mark PaymentIntent failed & expire
         // (2) restore stock and refund wallet (if used)
-        console.error('Razorpay order creation failed:', razErr.message);
+        console.error('Razorpay order creation failed:', razErr);
 
         // Compensation transaction
         const compSession = await mongoose.startSession();
