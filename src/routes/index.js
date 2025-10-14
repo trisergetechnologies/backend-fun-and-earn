@@ -15,4 +15,59 @@ router.use('/auth', authRouter);
 router.use('/ecart', eCartRouter);
 router.use('/shortvideo', shortVideoRouter);
 
+router.get('/payment/razorpay-redirect', async (req, res) => {
+    try {
+        const { intent, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.query;
+
+        if (!intent || !razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+            console.warn('[Bridge] Missing Razorpay params:', req.query);
+            return res
+                .status(400)
+                .send(`<h2>⚠️ Invalid Redirect</h2><p>Missing parameters. Please reopen Dream Mart app.</p>`);
+        }
+
+        // Build deep link (must match your Expo scheme)
+        const deepLink = `dreammart://private/success?intent=${encodeURIComponent(
+            intent
+        )}&razorpay_payment_id=${encodeURIComponent(
+            razorpay_payment_id
+        )}&razorpay_order_id=${encodeURIComponent(
+            razorpay_order_id
+        )}&razorpay_signature=${encodeURIComponent(razorpay_signature)}`;
+
+        console.log('[Bridge] Redirecting →', deepLink);
+
+        // Return small HTML that auto-redirects & provides manual button
+        const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Redirecting to Dream Mart</title>
+<style>
+  body{font-family:sans-serif;text-align:center;margin-top:10%;}
+  a.button{background:#10b981;color:white;padding:14px 24px;text-decoration:none;border-radius:6px;}
+</style>
+<script>
+  setTimeout(() => { window.location.href = '${deepLink}'; }, 800);
+</script>
+</head>
+<body>
+  <h2>🎉 Payment Successful</h2>
+  <p>You are being redirected to the Dream Mart app...</p>
+  <p>If it doesn’t open automatically, tap below:</p>
+  <a class="button" href="${deepLink}">Open in Dream Mart</a>
+</body>
+</html>`;
+        res.status(200).send(html);
+    } catch (err) {
+        console.error('[Bridge] Error:', err);
+        res
+            .status(500)
+            .send('<h2>❌ Error</h2><p>Unable to complete redirect. Please reopen Dream Mart app.</p>');
+    }
+});
+
+
 module.exports = router;
