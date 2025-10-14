@@ -15,7 +15,7 @@ router.use('/auth', authRouter);
 router.use('/ecart', eCartRouter);
 router.use('/shortvideo', shortVideoRouter);
 
-router.get('/payment/razorpay-redirect', async (req, res) => {
+router.post('/payment/razorpay-redirect', async (req, res) => {
     try {
         const { intent, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.query;
 
