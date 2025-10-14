@@ -374,10 +374,13 @@ exports.createOrderIntent = async (req, res) => {
     // Step 9: If remaining > 0, create Razorpay order and update PaymentIntent (outside DB txn)
     if (remaining > 0) {
       try {
+
+        const shortOrderId = orderDoc._id.toString().slice(-8); // last 8 chars only
+        
         const razorpayOrder = await razorpay.orders.create({
           amount: Math.round(remaining * 100), // paise
           currency: 'INR',
-          receipt: `rcpt_${orderDoc._id}_${Date.now()}`,
+          receipt: `rcpt_${shortOrderId}_${Date.now().toString().slice(-5)}`,
           payment_capture: 1 // auto-capture
         });
 
