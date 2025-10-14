@@ -92,11 +92,11 @@ exports.logWatchTime = async (req, res) => {
       });
     }
 
-    console.log("time before: ", user.shortVideoProfile.watchTime);
+    // console.log("time before: ", user.shortVideoProfile.watchTime);
     const newWatchTime = user.shortVideoProfile.watchTime + duration;
     user.shortVideoProfile.watchTime = newWatchTime;
     await user.save();
-    console.log("time after: ", user.shortVideoProfile.watchTime);
+    // console.log("time after: ", user.shortVideoProfile.watchTime);
 
     res.status(200).json({
       success: true,
