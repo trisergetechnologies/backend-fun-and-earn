@@ -376,12 +376,14 @@ exports.createOrderIntent = async (req, res) => {
       try {
 
         const shortOrderId = orderDoc._id.toString().slice(-8); // last 8 chars only
+        const callbackUrl = `https://amp-api.mpdreams.in/api/v1/payment/razorpay-redirect?intent=${paymentIntentDoc._id}`;
         
         const razorpayOrder = await razorpay.orders.create({
           amount: Math.round(remaining * 100), // paise
           currency: 'INR',
           receipt: `rcpt_${shortOrderId}_${Date.now().toString().slice(-5)}`,
-          payment_capture: 1 // auto-capture
+          payment_capture: 1, // auto-capture
+          notes: { callback_url: callbackUrl }
         });
 
         // update PaymentIntent with razorpayOrderId
@@ -401,6 +403,7 @@ exports.createOrderIntent = async (req, res) => {
             razorpayKeyId: RAZORPAY_KEY_ID,
             amount: remaining,
             currency: 'INR',
+            callbackUrl,
             expiresAt
           }
         });
