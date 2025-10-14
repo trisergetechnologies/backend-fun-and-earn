@@ -69,7 +69,7 @@ router.use('/shortvideo', shortVideoRouter);
 //     }
 // });
 
-exports.razorpayRedirectBridge = async (req, res) => {
+const razorpayRedirectBridge = async (req, res) => {
   const { razorpay_payment_id, razorpay_order_id, razorpay_signature, intent } = req.query;
   console.log('[Bridge] Incoming params:', req.query);
 
