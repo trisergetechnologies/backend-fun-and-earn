@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-
+require('dotenv').config();
 
 const WalletTransaction = require('../../../models/WalletTransaction');
 const User = require('../../../models/User');
