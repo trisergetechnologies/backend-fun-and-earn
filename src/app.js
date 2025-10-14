@@ -10,6 +10,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const router = require('./routes');
 const path = require('path');
+const { paymentWebhook } = require('./eCart/controllers/user/payment.controller.user.js');
 require('./jobs/walletTransfer.js')
 
 /**
@@ -20,6 +21,16 @@ require('./jobs/walletTransfer.js')
 const createApp = () => {
   // Initialize Express application
   const app = express();
+
+
+  // Razorpay Webhook (public — Razorpay server calls this)
+  app.post(
+    '/api/payment/webhook',
+    express.raw({ type: 'application/json' }),
+    paymentWebhook
+  );
+
+
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
   app.use('/invoices', express.static(path.join(__dirname, '../invoices')));
   app.set('trust proxy', true);

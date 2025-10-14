@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const Razorpay = require('razorpay');
+
 const Cart = require('../../models/Cart');
 const User = require('../../../models/User');
 const Product = require('../../models/Product');
@@ -10,6 +12,7 @@ const moment = require('moment');
 const PDFDocument = require('pdfkit');
 const fs = require("fs");
 const path = require("path");
+const PaymentIntent = require('../../models/PaymentIntent');
 
 
 exports.placeOrder = async (req, res) => {
@@ -166,6 +169,329 @@ exports.placeOrder = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: `Order failed: ${err.message}`
+    });
+  }
+};
+
+
+
+
+// config
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const HOLD_WINDOW_MINUTES = parseInt(process.env.ORDER_HOLD_WINDOW_MINUTES || '30', 10); // default 30 min
+
+const razorpay = new Razorpay({
+  key_id: RAZORPAY_KEY_ID,
+  key_secret: RAZORPAY_KEY_SECRET
+});
+
+function msFromNow(minutes) {
+  return new Date(Date.now() + minutes * 60 * 1000);
+}
+
+exports.createOrderIntent = async (req, res) => {
+  const user = req.user;
+  const { useWallet = false, deliverySlug, idempotencyKey } = req.body;
+
+  if (!deliverySlug) {
+    return res.status(200).json({ success: false, message: 'deliverySlug is required' });
+  }
+
+  // Step 0: Quick guard
+  const session = await mongoose.startSession();
+
+  try {
+    // Idempotency: if idempotencyKey provided, return existing valid PaymentIntent
+    if (idempotencyKey) {
+      const existing = await PaymentIntent.findOne({
+        userId: user._id,
+        idempotencyKey,
+        status: { $in: ['created','authorized'] } // still active intents
+      });
+
+      if (existing) {
+        // find associated order if any
+        const order = existing.referenceId ? await Order.findById(existing.referenceId) : null;
+        return res.status(200).json({
+          success: true,
+          message: 'Existing intent found',
+          data: {
+            paymentIntentId: existing._id,
+            razorpayOrderId: existing.razorpayOrderId,
+            orderId: order?._id || null,
+            amount: existing.amount,
+            expiresAt: existing.expiresAt
+          }
+        });
+      }
+    }
+
+    // Step 1: Load cart
+    session.startTransaction();
+    const cart = await Cart.findOne({ userId: user._id }).populate('items.productId').session(session);
+    if (!cart || !cart.items || cart.items.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({ success: false, message: 'Cart is empty' });
+    }
+
+    // Step 2: Load user doc (with session)
+    let userDoc = await User.findById(user._id).session(session);
+    if (!userDoc) {
+      throw new Error('User not found');
+    }
+
+    // Step 3: Get address snapshot
+    const address = userDoc.eCartProfile?.addresses?.find(a => a.slugName === deliverySlug);
+    if (!address) {
+      throw new Error('Delivery address not found');
+    }
+    const deliveryAddress = {
+      addressName: address.addressName,
+      fullName: address.fullName,
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      pincode: address.pincode,
+      phone: address.phone
+    };
+
+    // Step 4: Build order items, validate stock
+    let subtotal = 0;
+    const orderItems = [];
+
+    for (const item of cart.items) {
+      const product = item.productId;
+      if (!product || !product.isActive || product.stock < item.quantity) {
+        throw new Error(`Product ${product?.title || 'unknown'} unavailable or insufficient stock`);
+      }
+
+      const itemTotal = product.finalPrice * item.quantity;
+      subtotal += itemTotal;
+
+      orderItems.push({
+        productId: product._id,
+        sellerId: product.sellerId,
+        quantity: item.quantity,
+        priceAtPurchase: product.price,
+        finalPriceAtPurchase: product.finalPrice,
+        productTitle: product.title,
+        productThumbnail: product.images?.[0] || '',
+        returnPolicyDays: product.returnPolicyDays || 3
+      });
+    }
+
+    const grossPayable = subtotal + (cart.totalGstAmount || 0);
+
+    // Step 5: Wallet usage — compute usedWallet but decrement atomically if > 0
+    let usedWalletAmount = 0;
+    let remaining = grossPayable;
+
+    if (useWallet && userDoc.wallets?.eCartWallet > 0) {
+      usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, grossPayable);
+
+      // Attempt atomic wallet decrement
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: user._id, 'wallets.eCartWallet': { $gte: usedWalletAmount } },
+        { $inc: { 'wallets.eCartWallet': -usedWalletAmount } },
+        { new: true, session }
+      );
+
+      if (!updatedUser) {
+        throw new Error('Insufficient wallet balance (concurrent change)');
+      }
+
+      // Create wallet transaction
+      await WalletTransaction.create([{
+        userId: user._id,
+        type: 'spend',
+        source: 'purchase',
+        fromWallet: 'eCartWallet',
+        toWallet: null,
+        amount: usedWalletAmount,
+        status: 'success',
+        triggeredBy: 'user',
+        notes: `Wallet used during order creation (idempotencyKey: ${idempotencyKey || 'none'})`
+      }], { session });
+
+      remaining = +(grossPayable - usedWalletAmount);
+    }
+
+    // Step 6: Deduct stock (reserve) inside transaction
+    for (const item of cart.items) {
+      const product = await Product.findById(item.productId._id).session(session);
+      if (!product || product.stock < item.quantity) {
+        throw new Error(`Product ${product?.title || 'unknown'} out of stock during reserve`);
+      }
+      product.stock -= item.quantity;
+      await product.save({ session });
+    }
+
+    // Step 7: Create Order and PaymentIntent record
+    // PaymentIntent created with status 'created' and will be updated with razorpayOrderId after commit
+    const orderDoc = new Order({
+      buyerId: user._id,
+      items: orderItems,
+      deliveryAddress,
+      usedWalletAmount,
+      totalAmount: subtotal,
+      finalAmountPaid: remaining, // amount expected to be paid via Razorpay (0 if wallet covered)
+      totalGstAmount: cart.totalGstAmount || 0,
+      paymentStatus: remaining > 0 ? 'pending' : 'paid',
+      status: 'placed',
+      paymentInfo: {
+        gateway: remaining > 0 ? 'razorpay' : 'walletOnly',
+        paymentId: null
+      }
+    });
+
+    await orderDoc.save({ session });
+
+    const expiresAt = msFromNow(HOLD_WINDOW_MINUTES);
+
+    const paymentIntentDoc = new PaymentIntent({
+      userId: user._id,
+      purpose: 'order',
+      referenceId: orderDoc._id,
+      amount: remaining,
+      currency: 'INR',
+      status: remaining > 0 ? 'created' : 'captured', // if remaining 0, consider captured
+      expiresAt: remaining > 0 ? expiresAt : new Date(),
+      idempotencyKey: idempotencyKey || null
+    });
+
+    await paymentIntentDoc.save({ session });
+
+    // Step 8: Clear cart (we preserve order but empty cart)
+    await Cart.deleteOne({ userId: user._id }, { session });
+
+    // Commit DB transaction: wallet deducted, stock reserved, order & paymentIntent stored
+    await session.commitTransaction();
+    session.endSession();
+
+    // Step 9: If remaining > 0, create Razorpay order and update PaymentIntent (outside DB txn)
+    if (remaining > 0) {
+      try {
+        const razorpayOrder = await razorpay.orders.create({
+          amount: Math.round(remaining * 100), // paise
+          currency: 'INR',
+          receipt: `rcpt_${orderDoc._id}_${Date.now()}`,
+          payment_capture: 1 // auto-capture
+        });
+
+        // update PaymentIntent with razorpayOrderId
+        await PaymentIntent.findByIdAndUpdate(paymentIntentDoc._id, {
+          razorpayOrderId: razorpayOrder.id,
+          meta: { razorpayOrderPayload: razorpayOrder }
+        }, { new: true });
+
+        // Respond to client with order and razorpay details
+        return res.status(200).json({
+          success: true,
+          message: 'Order intent created. Complete payment via Razorpay.',
+          data: {
+            orderId: orderDoc._id,
+            paymentIntentId: paymentIntentDoc._id,
+            razorpayOrderId: razorpayOrder.id,
+            razorpayKeyId: RAZORPAY_KEY_ID,
+            amount: remaining,
+            currency: 'INR',
+            expiresAt
+          }
+        });
+
+      } catch (razErr) {
+        // Razorpay order creation failed — perform compensating rollback:
+        // (1) mark PaymentIntent failed & expire
+        // (2) restore stock and refund wallet (if used)
+        console.error('Razorpay order creation failed:', razErr.message);
+
+        // Compensation transaction
+        const compSession = await mongoose.startSession();
+        compSession.startTransaction();
+        try {
+          // mark paymentIntent failed
+          await PaymentIntent.findByIdAndUpdate(paymentIntentDoc._id, {
+            status: 'failed',
+            meta: { error: razErr.message }
+          }, { session: compSession });
+
+          // restore stock
+          for (const item of cart.items) {
+            await Product.findByIdAndUpdate(item.productId._id, { $inc: { stock: item.quantity } }, { session: compSession });
+          }
+
+          // refund wallet if used
+          if (usedWalletAmount > 0) {
+            await User.findByIdAndUpdate(user._id, { $inc: { 'wallets.eCartWallet': usedWalletAmount } }, { session: compSession });
+
+            await WalletTransaction.create([{
+              userId: user._id,
+              type: 'earn',
+              source: 'system',
+              fromWallet: 'eCartWallet',
+              toWallet: null,
+              amount: usedWalletAmount,
+              status: 'success',
+              triggeredBy: 'system',
+              notes: 'Refund wallet due to Razorpay order creation failure'
+            }], { session: compSession });
+          }
+
+          // mark order as cancelled due to payment system error
+          await Order.findByIdAndUpdate(orderDoc._id, {
+            paymentStatus: 'failed',
+            status: 'cancelled'
+          }, { session: compSession });
+
+          await compSession.commitTransaction();
+          compSession.endSession();
+
+        } catch (compErr) {
+          await compSession.abortTransaction();
+          compSession.endSession();
+
+          console.error('Compensation rollback failed:', compErr.message);
+          // best-effort: log and continue to surface error
+        }
+
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to initialize payment with Razorpay. Wallet refunded and order cancelled.',
+          error: razErr.message
+        });
+      }
+    } else {
+      // remaining === 0 -> wallet-only order already placed and marked paid
+      return res.status(200).json({
+        success: true,
+        message: 'Order placed successfully using wallet only',
+        data: {
+          orderId: orderDoc._id,
+          paymentIntentId: paymentIntentDoc._id,
+          totalAmount: subtotal,
+          walletUsed: usedWalletAmount,
+          paidAmount: 0,
+          totalGstAmount: cart.totalGstAmount || 0
+        }
+      });
+    }
+
+  } catch (err) {
+    // Abort main session if not ended
+    try {
+      await session.abortTransaction();
+      session.endSession();
+    } catch (e) {
+      // ignore
+    }
+
+    console.error('createOrderIntent error:', err.message);
+    
+    return res.status(500).json({
+      success: false,
+      message: `Could not create order intent: ${err.message}`
     });
   }
 };
