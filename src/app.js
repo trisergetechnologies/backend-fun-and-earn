@@ -12,6 +12,7 @@ const router = require('./routes');
 const path = require('path');
 const { paymentWebhook } = require('./eCart/controllers/user/payment.controller.user.js');
 require('./jobs/walletTransfer.js')
+require('./jobs/reconcileRazorpayPayments.js')
 
 /**
  * Creates a new Express application with base configuration
