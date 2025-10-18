@@ -83,7 +83,7 @@ exports.getProducts = async (req, res) => {
   try {
     const admin = req.user;
     const { id } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 25 } = req.query;
     const skip = (page - 1) * limit;
 
     // If ID is provided → return single product with full details

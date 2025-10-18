@@ -7,8 +7,10 @@ const User = require('../../../models/User');
 const Product = require('../../models/Product');
 const PaymentIntent = require('../../models/PaymentIntent');
 const Order = require('../../models/Order');
+const Razorpay = require('razorpay');
 
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 
 exports.verifyPayment = async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, paymentIntentId } = req.body;
@@ -145,6 +147,7 @@ async function handlePaymentCaptured(intent, paymentPayload) {
 
     // Update Order
     order.paymentStatus = 'paid';
+    order.status = 'placed'
     order.paymentInfo.paymentId = paymentPayload.id;
     order.paymentInfo.gateway = 'razorpay';
     order.finalAmountPaid = intent.amount;
@@ -309,5 +312,209 @@ exports.paymentWebhook = async (req, res) => {
   } catch (err) {
     console.error('[Webhook] Error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const razorpay = new Razorpay({
+  key_id: RAZORPAY_KEY_ID,
+  key_secret: RAZORPAY_KEY_SECRET
+});
+
+
+
+exports.verifyOrderStatus = async (req, res) => {
+  const { razorpayOrderId } = req.params;
+
+  if (!razorpayOrderId) {
+    return res.status(200).json({ success: false, message: 'Missing Razorpay order ID' });
+  }
+
+  try {
+    // Try fetching the order details from Razorpay
+    const order = await razorpay.orders.fetch(razorpayOrderId);
+    const payments = await razorpay.orders.fetchPayments(razorpayOrderId);
+
+    // Calculate order age (seconds since creation)
+    const createdAt = order?.created_at ? new Date(order.created_at * 1000) : null;
+    const ageSeconds = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 1000) : null;
+
+    // Quick heuristics
+    const hasCaptured = payments?.items?.some((p) => p.status === 'captured');
+    const hasFailed = payments?.items?.every((p) => p.status === 'failed');
+    const hasAuthorized = payments?.items?.some((p) => p.status === 'authorized');
+
+    // default decision
+    let decision = 'WAIT';
+    let reason = 'pending';
+    let orderStatus = order.status; // created / paid / attempted
+
+    if (hasCaptured || order.status === 'paid') {
+      decision = 'SUCCESS';
+      reason = 'Payment captured';
+    } else if (hasFailed || order.status === 'failed') {
+      decision = 'FAIL';
+      reason = 'Payment failed';
+    } else if (hasAuthorized) {
+      // sometimes Razorpay lingers in authorized before capture
+      decision = 'WAIT';
+      reason = 'Authorized but not captured yet';
+    } else if (order.status === 'attempted' && ageSeconds && ageSeconds > 120) {
+      // Attempted for >2 mins, still no capture
+      decision = 'FAIL';
+      reason = 'Payment attempt timed out (>120s)';
+    } else if (order.status === 'created' && ageSeconds && ageSeconds > 120) {
+      // Never attempted even after 2 mins
+      decision = 'FAIL';
+      reason = 'No payment attempt after 2 mins';
+    }
+
+    // 🔁 Optionally update local PaymentIntent for tracking
+    const paymentIntent = await PaymentIntent.findOne({ razorpayOrderId });
+    if (paymentIntent) {
+      // update meta fields only (idempotent)
+      paymentIntent.meta = paymentIntent.meta || {};
+      paymentIntent.meta.lastVerifyStatus = {
+        decision,
+        orderStatus,
+        ageSeconds,
+        checkedAt: new Date()
+      };
+
+      if (decision === 'SUCCESS' && paymentIntent.status !== 'captured') {
+        paymentIntent.status = 'captured';
+      } else if (decision === 'FAIL' && paymentIntent.status === 'created') {
+        paymentIntent.status = 'failed';
+      }
+
+      await paymentIntent.save();
+
+      // If linked order exists, reflect status there (optional)
+      if (paymentIntent.referenceId && decision === 'FAIL') {
+        await Order.findByIdAndUpdate(paymentIntent.referenceId, {
+          paymentStatus: 'failed',
+          status: 'cancelled'
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      decision,
+      orderStatus,
+      reason,
+      ageSeconds
+    });
+  } catch (err) {
+    console.error('[verifyOrderStatus] Error:', err.message);
+    return res.status(500).json({
+      success: false,
+      decision: 'WAIT',
+      message: 'Failed to verify Razorpay order status',
+      error: err.message
+    });
+  }
+};
+
+
+
+exports.markPaymentFailed = async (req, res) => {
+  const { paymentIntentId, reason = 'cancelled_by_user' } = req.body;
+  const user = req.user;
+
+  if (!paymentIntentId) {
+    return res.status(400).json({
+      success: false,
+      message: 'paymentIntentId is required'
+    });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const intent = await PaymentIntent.findById(paymentIntentId).session(session);
+    if (!intent) throw new Error('PaymentIntent not found');
+
+    // Idempotent check — if already captured or failed, just return
+    if (['captured', 'failed', 'cancelled'].includes(intent.status)) {
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: `PaymentIntent already marked as ${intent.status}`,
+        status: intent.status
+      });
+    }
+
+    // Mark as failed
+    intent.status = 'failed';
+    intent.meta = intent.meta || {};
+    intent.meta.failedReason = reason;
+    intent.meta.failedAt = new Date();
+    await intent.save({ session });
+
+    // If linked order exists, mark it cancelled + rollback any wallet deduction / stock
+    if (intent.referenceId) {
+      const order = await Order.findById(intent.referenceId).session(session);
+      if (order) {
+        order.paymentStatus = 'failed';
+        order.status = 'cancelled';
+        order.trackingUpdates.push({
+          status: 'cancelled',
+          note: `Payment marked failed (${reason})`
+        });
+        await order.save({ session });
+
+        // refund wallet if used
+        if (order.usedWalletAmount && order.usedWalletAmount > 0) {
+          await User.findByIdAndUpdate(
+            order.buyerId,
+            { $inc: { 'wallets.eCartWallet': order.usedWalletAmount } },
+            { session }
+          );
+
+          await WalletTransaction.create(
+            [
+              {
+                userId: order.buyerId,
+                type: 'earn',
+                source: 'system',
+                fromWallet: 'eCartWallet',
+                amount: order.usedWalletAmount,
+                status: 'success',
+                triggeredBy: 'system',
+                notes: `Refunded wallet (payment failed: ${reason})`
+              }
+            ],
+            { session }
+          );
+        }
+
+        // restore stock
+        for (const item of order.items) {
+          await Product.findByIdAndUpdate(
+            item.productId,
+            { $inc: { stock: item.quantity } },
+            { session }
+          );
+        }
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: 'PaymentIntent and Order marked as failed successfully'
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('[markPaymentFailed] error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: `Failed to mark payment as failed: ${err.message}`
+    });
   }
 };
