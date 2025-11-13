@@ -541,7 +541,7 @@ exports.getCompleteInfo = async (req, res) => {
       WalletTransaction.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_TX_LIMIT).lean(),
 
       // earning logs where this user received (EarningLog.userId)
-      EarningLog.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_EARNING_LOGS_LIMIT).lean(),
+      EarningLog.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_EARNING_LOGS_LIMIT).populate({path: 'fromUser',select: 'name email'}).lean(),
 
       // coupons earned by user
       Coupon.find({ earnedBy: user._id }).sort({ createdAt: -1 }).limit(RECENT_COUPONS_LIMIT).lean(),
@@ -718,7 +718,7 @@ exports.transferShortVideoToECart = async (req, res) => {
 
 
           // Add 10% of withdrawal amount to system wallet (adminChargeEarnedFromWithdrals)
-          const adminCharge = round2(withdrawalAmount * 0.01);
+          const adminCharge = round2(withdrawalAmount * 0.10);
           await SystemWallet.updateOne({}, { $inc: { adminChargeEarnedFromWithdrals: adminCharge } });
 
           await SystemEarningLog.create({
