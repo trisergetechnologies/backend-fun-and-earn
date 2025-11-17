@@ -27,7 +27,7 @@ exports.distributeNetworkWithdrawalEarnings = async (user, withdrawalAmount) => 
         u._id.toString() !== user._id.toString();
 
       if (isInRange) {
-        const earning = +(withdrawalAmount * 0.004).toFixed(2); // 0.4%
+        const earning = +(withdrawalAmount * 0.004); // 0.4%
 
         u.wallets.shortVideoWallet += earning;
         actualDistributed += earning;

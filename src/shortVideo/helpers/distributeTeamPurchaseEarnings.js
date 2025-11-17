@@ -78,7 +78,7 @@ exports.distributeTeamPurchaseEarnings = async (userId, packagePrice) => {
 
       if (level < maxEarningLevel) {
         const percent = TEAM_PURCHASE_PERCENTAGES[level];
-        const earningAmount = +(packagePrice * (percent / 100)).toFixed(2);
+        const earningAmount = +(packagePrice * (percent / 100));
 
         // Add earnings to wallet
         referrer.wallets.shortVideoWallet += earningAmount;

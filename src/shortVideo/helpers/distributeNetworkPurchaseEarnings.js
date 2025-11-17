@@ -37,7 +37,7 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
         (buyerSerial - user.serialNumber) <= maxRange;
 
       if (isInRange) {
-        const amount = +(0.01 * buyerPackagePrice).toFixed(2);
+        const amount = +(0.01 * buyerPackagePrice);
 
         user.wallets.shortVideoWallet = Number(user.wallets.shortVideoWallet || 0) + amount;
         actualDistributed += amount;

@@ -76,7 +76,7 @@ exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
 
       if (level < maxEarningLevel) {
         const percent = TEAM_WITHDRAWAL_PERCENTAGES[level];
-        const earningAmount = +(withdrawalAmount * (percent / 100)).toFixed(2);
+        const earningAmount = +(withdrawalAmount * (percent / 100));
 
         // Add earnings to wallet
         referrer.wallets.shortVideoWallet += earningAmount;
