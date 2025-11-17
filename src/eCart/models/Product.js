@@ -62,6 +62,11 @@ const ProductSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  
+  isSpecial:{
+    type: Boolean,
+    default: false
+  },
 
   createdByRole: {
     type: String,
