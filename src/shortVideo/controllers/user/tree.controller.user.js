@@ -144,7 +144,17 @@ exports.getEarnings = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const earnings = await EarningLog.find({ userId })
+    // Get today's date range
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const earnings = await EarningLog.find({
+      userId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    })
       .sort({ createdAt: -1 })
       .populate("fromUser", "name")
       .lean();
