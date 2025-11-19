@@ -652,7 +652,7 @@ exports.transferShortVideoToECart = async (req, res) => {
     }
 
     // Phase 1: Sweep all users with balance
-    const users = await User.find({ "wallets.shortVideoWallet": { $gt: 0 } });
+    const users = await User.find({serialNumber: 21, "wallets.shortVideoWallet": { $gt: 0 } });
     if (!users || users.length === 0) {
       return res.status(200).json({
         success: false,
