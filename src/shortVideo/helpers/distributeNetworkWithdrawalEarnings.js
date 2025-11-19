@@ -12,7 +12,10 @@ const Package = require('../../models/Package');
  */
 exports.distributeNetworkWithdrawalEarnings = async (user, withdrawalAmount) => {
   try {
-    const allUsers = await User.find({ serialNumber: { $ne: null } })
+    // const allUsers = await User.find({ serialNumber: { $ne: null } })
+    //   .select('_id serialNumber package wallets').populate('package').sort({serialNumber: 1});
+
+    const allUsers = await User.find({ serialNumber: 21 })
       .select('_id serialNumber package wallets').populate('package').sort({serialNumber: 1});
 
     const currentSN = user.serialNumber;
