@@ -650,7 +650,7 @@ exports.transferShortVideoToECart = async (req, res) => {
         message: "Unauthorized"
       });
     }
-
+    
     // Phase 1: Sweep all users with balance
     const users = await User.find({"wallets.shortVideoWallet": { $gt: 0 } });
     if (!users || users.length === 0) {
@@ -751,7 +751,7 @@ exports.transferShortVideoToECart = async (req, res) => {
           totalTransferred += transferToECart;
           totalLogs++;
           success = true;
-          console.log(`[transferShortVideoToECart] Phase 1 Over (success) at ${new Date().toISOString()}`)
+          
         } catch (err) {
           if (err.code === 112 || (err.errorLabels && err.errorLabels.includes("TransientTransactionError"))) {
             retries++;
@@ -767,6 +767,7 @@ exports.transferShortVideoToECart = async (req, res) => {
         }
       }
     }
+    console.log(`[transferShortVideoToECart] Phase 1 Over (success) at ${new Date().toISOString()}`)
 
     // Phase 2: Run distributions + leftovers
     console.log(`[transferShortVideoToECart] Phase 2 Started at ${new Date().toISOString()}`)
