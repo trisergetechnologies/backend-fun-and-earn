@@ -660,6 +660,7 @@ exports.transferShortVideoToECart = async (req, res) => {
         data: null
       });
     }
+    console.log(`[transferShortVideoToECart] Started Phase 1 at ${new Date().toISOString()}`)
 
     const snapshots = []; // store { userId, withdrawalAmount }
     let totalTransferred = 0;
@@ -750,6 +751,7 @@ exports.transferShortVideoToECart = async (req, res) => {
           totalTransferred += transferToECart;
           totalLogs++;
           success = true;
+          console.log(`[transferShortVideoToECart] Phase 1 Over (success) at ${new Date().toISOString()}`)
         } catch (err) {
           if (err.code === 112 || (err.errorLabels && err.errorLabels.includes("TransientTransactionError"))) {
             retries++;
@@ -767,6 +769,7 @@ exports.transferShortVideoToECart = async (req, res) => {
     }
 
     // Phase 2: Run distributions + leftovers
+    console.log(`[transferShortVideoToECart] Phase 2 Started at ${new Date().toISOString()}`)
     let distributionsRun = 0;
     for (const snap of snapshots) {
       try {
@@ -782,7 +785,7 @@ exports.transferShortVideoToECart = async (req, res) => {
         console.error(`⚠️ Distribution error for user ${snap.userId}:`, distErr.message);
       }
     }
-
+    console.log(`[transferShortVideoToECart] Phase 2 Over (success) at ${new Date().toISOString()}`)
     return res.status(200).json({
       success: true,
       message: "Funds transferred successfully from shortVideo → eCart, distributions applied",
