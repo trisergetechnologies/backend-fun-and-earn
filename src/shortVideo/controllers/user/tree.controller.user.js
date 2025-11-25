@@ -1,6 +1,7 @@
 const User = require("../../../models/User");
 const Package = require("../../../models/Package");
 const EarningLog = require("../../models/EarningLog");
+const mongoose = require('mongoose')
 
 async function buildReferralTree(referralCode) {
   // Find all users who were referred using this referral code
