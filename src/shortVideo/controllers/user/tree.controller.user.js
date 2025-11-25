@@ -171,3 +171,66 @@ exports.getEarnings = async (req, res) => {
     });
   }
 };
+
+exports.getSummary = async (req, res) => {
+
+  try {
+    const userId = req.user?._id
+
+    const now = new Date();
+
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const oneWeekAgo = new Date(now);
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const [result] = await EarningLog.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          status: 'success', // only successful entries
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalEarning: { $sum: '$amount' },
+          lastWeekEarning: {
+            $sum: {
+              $cond: [
+                { $gte: ['$createdAt', oneWeekAgo] },
+                '$amount',
+                0
+              ]
+            }
+          },
+          todayEarning: {
+            $sum: {
+              $cond: [
+                { $gte: ['$createdAt', startOfToday] },
+                '$amount',
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        totalEarning: result?.totalEarning || 0,
+        lastWeekEarning: result?.lastWeekEarning || 0,
+        todayEarning: result?.todayEarning || 0
+      }
+    });
+  } catch (err) {
+    console.error('Error getting earnings summary:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Something went wrong while fetching earnings summary.'
+    });
+  }
+};
