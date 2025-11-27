@@ -157,7 +157,7 @@ exports.getEarnings = async (req, res) => {
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     })
       .sort({ createdAt: -1 })
-      .populate("fromUser", "name")
+      .populate("fromUser", "name serialNumber")
       .lean();
 
     res.json({
