@@ -1,5 +1,6 @@
 const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
+const DELIVERY_CHARGE = 100;
 
 exports.getCart = async (req, res) => {
   try {
