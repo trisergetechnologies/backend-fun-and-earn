@@ -29,6 +29,11 @@ const CartSchema = new mongoose.Schema({
     default: 0
   },
 
+  deliveryCharge:{
+    type: Number,
+    default: 0
+  },
+
   useWallet: {
     type: Boolean,
     default: false

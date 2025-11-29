@@ -29,6 +29,9 @@ exports.getCart = async (req, res) => {
       }
     });
 
+    const hasSpecialItem = cart.items.some(item => item.productId.isSpecial);
+    cart.deliveryCharge = hasSpecialItem ? DELIVERY_CHARGE : 0;
+
     // 🔹 Round to 2 decimals
     totalGstAmount = Number(totalGstAmount.toFixed(2));
 

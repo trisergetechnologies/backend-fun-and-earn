@@ -131,6 +131,11 @@ const OrderSchema = new mongoose.Schema({
     default: 'none'
   },
 
+  deliveryCharge:{
+    type: Number,
+    default: 0
+  },
+
   trackingUpdates: [{
   status: {
     type: String,
