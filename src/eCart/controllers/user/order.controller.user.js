@@ -992,3 +992,285 @@ exports.downloadInvoice = async (req, res) => {
   }
 };
 
+
+
+exports.createOrderIntentOrangePG = async (req, res) => {
+  const user = req.user;
+  const { useWallet = false, deliverySlug, idempotencyKey } = req.body;
+
+  if (!deliverySlug) {
+    return res.status(200).json({ 
+      success: false, 
+      message: 'deliverySlug is required' 
+    });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    // ============================================================
+    // STEP 0: Idempotency Check
+    // ============================================================
+    if (idempotencyKey) {
+      const existing = await PaymentIntent.findOne({
+        userId: user._id,
+        idempotencyKey,
+        gateway: 'orange_pg',
+        status: { $in: ['created', 'authorized'] }
+      });
+
+      if (existing) {
+        const order = existing.referenceId ? await Order.findById(existing.referenceId) : null;
+        return res.status(200).json({
+          success: true,
+          message: 'Existing Orange PG intent found',
+          data: {
+            paymentIntentId: existing._id,
+            orderId: order?._id || null,
+            merchantTxnNo: existing.merchantTxnNo,
+            amount: existing.amount,
+            currency: existing.currency,
+            expiresAt: existing.expiresAt,
+            gateway: 'orange_pg'
+          }
+        });
+      }
+    }
+
+    // ============================================================
+    // STEP 1: Load Cart
+    // ============================================================
+    session.startTransaction();
+    
+    const cart = await Cart.findOne({ userId: user._id })
+      .populate('items.productId')
+      .session(session);
+      
+    if (!cart || !cart.items || cart.items.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({ 
+        success: false, 
+        message: 'Cart is empty' 
+      });
+    }
+
+    // ============================================================
+    // STEP 2: Load User
+    // ============================================================
+    const userDoc = await User.findById(user._id).session(session);
+    if (!userDoc) {
+      throw new Error('User not found');
+    }
+
+    // ============================================================
+    // STEP 3: Address Snapshot
+    // ============================================================
+    const address = userDoc.eCartProfile?.addresses?.find(
+      a => a.slugName === deliverySlug
+    );
+    
+    if (!address) {
+      throw new Error('Delivery address not found');
+    }
+
+    const deliveryAddress = {
+      addressName: address.addressName,
+      fullName: address.fullName,
+      street: address.street,
+      city: address.city,
+      state: address.state,
+      pincode: address.pincode,
+      phone: address.phone
+    };
+
+    // ============================================================
+    // STEP 4: Build Order Items & Validate Stock
+    // ============================================================
+    let subtotal = 0;
+    const orderItems = [];
+
+    for (const item of cart.items) {
+      const product = item.productId;
+      
+      if (!product || !product.isActive || product.stock < item.quantity) {
+        throw new Error(
+          `Product ${product?.title || 'unknown'} unavailable or insufficient stock`
+        );
+      }
+
+      const itemTotal = product.finalPrice * item.quantity;
+      subtotal += itemTotal;
+
+      orderItems.push({
+        productId: product._id,
+        sellerId: product.sellerId,
+        quantity: item.quantity,
+        priceAtPurchase: product.price,
+        finalPriceAtPurchase: product.finalPrice,
+        productTitle: product.title,
+        productThumbnail: product.images?.[0] || '',
+        returnPolicyDays: product.returnPolicyDays || 3
+      });
+    }
+
+    const grossPayable = subtotal + (cart.totalGstAmount || 0) + cart.deliveryCharge;
+
+    // ============================================================
+    // STEP 5: Wallet Usage (Atomic Deduction)
+    // ============================================================
+    let usedWalletAmount = 0;
+    let remaining = grossPayable;
+
+    if (useWallet && userDoc.wallets?.eCartWallet > 0) {
+      usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, grossPayable);
+
+      // Atomic wallet decrement
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: user._id, 'wallets.eCartWallet': { $gte: usedWalletAmount } },
+        { $inc: { 'wallets.eCartWallet': -usedWalletAmount } },
+        { new: true, session }
+      );
+
+      if (!updatedUser) {
+        throw new Error('Insufficient wallet balance (concurrent change)');
+      }
+
+      // Create wallet transaction
+      await WalletTransaction.create([{
+        userId: user._id,
+        type: 'spend',
+        source: 'purchase',
+        fromWallet: 'eCartWallet',
+        toWallet: null,
+        amount: usedWalletAmount,
+        status: 'success',
+        triggeredBy: 'user',
+        notes: `Wallet used during Orange PG order creation (idempotencyKey: ${idempotencyKey || 'none'})`
+      }], { session });
+
+      remaining = +(grossPayable - usedWalletAmount);
+    }
+
+    // ============================================================
+    // STEP 6: Reserve Stock
+    // ============================================================
+    for (const item of cart.items) {
+      const product = await Product.findById(item.productId._id).session(session);
+      
+      if (!product || product.stock < item.quantity) {
+        throw new Error(
+          `Product ${product?.title || 'unknown'} out of stock during reserve`
+        );
+      }
+      
+      product.stock -= item.quantity;
+      await product.save({ session });
+    }
+
+    // ============================================================
+    // STEP 7: Create Order & PaymentIntent
+    // ============================================================
+    const orderDoc = new Order({
+      buyerId: user._id,
+      items: orderItems,
+      deliveryAddress,
+      usedWalletAmount,
+      totalAmount: subtotal,
+      finalAmountPaid: remaining,
+      totalGstAmount: cart.totalGstAmount || 0,
+      deliveryCharge: cart.deliveryCharge,
+      paymentStatus: remaining > 0 ? 'pending' : 'paid',
+      status: 'placed',
+      paymentInfo: {
+        gateway: remaining > 0 ? 'orange_pg' : 'walletOnly',
+        paymentId: null
+      }
+    });
+
+    await orderDoc.save({ session });
+
+    const expiresAt = msFromNow(HOLD_WINDOW_MINUTES);
+
+    // Generate merchantTxnNo (max 20 chars, alphanumeric only)
+    // Format: ORD{last 16 chars of orderId}
+    const merchantTxnNo = `ORD${orderDoc._id.toString().slice(-16)}`;
+
+    const paymentIntentDoc = new PaymentIntent({
+      userId: user._id,
+      purpose: 'order',
+      referenceId: orderDoc._id,
+      amount: remaining,
+      currency: 'INR',
+      status: remaining > 0 ? 'created' : 'captured',
+      expiresAt: remaining > 0 ? expiresAt : new Date(),
+      idempotencyKey: idempotencyKey || null,
+      gateway: remaining > 0 ? 'orange_pg' : 'walletOnly',
+      merchantTxnNo, // Orange PG specific
+      meta: {}
+    });
+
+    await paymentIntentDoc.save({ session });
+
+    // ============================================================
+    // STEP 8: Clear Cart
+    // ============================================================
+    await Cart.deleteOne({ userId: user._id }, { session });
+
+    // ============================================================
+    // STEP 9: Commit Transaction
+    // ============================================================
+    await session.commitTransaction();
+    session.endSession();
+
+    // ============================================================
+    // STEP 10: Response
+    // ============================================================
+    if (remaining > 0) {
+      // Payment required via Orange PG
+      return res.status(200).json({
+        success: true,
+        message: 'Orange PG order intent created',
+        data: {
+          orderId: orderDoc._id,
+          paymentIntentId: paymentIntentDoc._id,
+          merchantTxnNo,
+          amount: remaining,
+          currency: 'INR',
+          expiresAt,
+          gateway: 'orange_pg'
+        }
+      });
+    } else {
+      // Wallet-only payment
+      return res.status(200).json({
+        success: true,
+        message: 'Order placed successfully using wallet only',
+        data: {
+          orderId: orderDoc._id,
+          paymentIntentId: paymentIntentDoc._id,
+          totalAmount: subtotal,
+          walletUsed: usedWalletAmount,
+          paidAmount: 0,
+          totalGstAmount: cart.totalGstAmount || 0
+        }
+      });
+    }
+
+  } catch (err) {
+    // Abort transaction
+    try {
+      await session.abortTransaction();
+      session.endSession();
+    } catch (e) {
+      // Ignore abort errors
+    }
+
+    console.error('[createOrderIntentOrangePG] error:', err.message);
+    
+    return res.status(500).json({
+      success: false,
+      message: `Could not create Orange PG order intent: ${err.message}`
+    });
+  }
+};
