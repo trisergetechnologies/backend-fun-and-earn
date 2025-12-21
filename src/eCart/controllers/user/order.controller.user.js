@@ -89,7 +89,7 @@ exports.placeOrder = async (req, res) => {
       product.stock -= item.quantity;
       await product.save({ session });
     }
-    let grossPayable = subtotal + cart.totalGstAmount;
+    let grossPayable = subtotal + cart.totalGstAmount + cart.deliveryCharge;
 
     // 5. Wallet usage
     let usedWalletAmount = 0;
@@ -124,6 +124,7 @@ exports.placeOrder = async (req, res) => {
       usedWalletAmount,
       totalAmount: subtotal,
       finalAmountPaid,
+      deliveryCharge: cart.deliveryCharge,
       totalGstAmount: cart.totalGstAmount,
       paymentStatus: 'paid',
       status: 'placed',
@@ -283,7 +284,7 @@ exports.createOrderIntent = async (req, res) => {
       });
     }
 
-    const grossPayable = subtotal + (cart.totalGstAmount || 0);
+    const grossPayable = subtotal + (cart.totalGstAmount || 0) + cart.deliveryCharge;
 
     // Step 5: Wallet usage — compute usedWallet but decrement atomically if > 0
     let usedWalletAmount = 0;
@@ -574,7 +575,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
       throw new Error(`Insufficient wallet balance. Required INR${subtotal}, available INR${walletBalance}`);
     }
 
-    const totalAmount = subtotal + cart.totalGstAmount;
+    const totalAmount = subtotal + cart.totalGstAmount + cart.deliveryCharge;
 
     userDoc.wallets.eCartWallet -= totalAmount;
     await userDoc.save({ session });
@@ -600,6 +601,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
       usedWalletAmount: subtotal,
       totalAmount: subtotal,
       finalAmountPaid: 0,
+      deliveryCharge: cart.deliveryCharge,
       totalGstAmount: cart.totalGstAmount,
       paymentStatus: 'paid',
       status: 'placed',

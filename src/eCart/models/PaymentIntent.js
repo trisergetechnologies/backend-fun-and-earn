@@ -21,9 +21,30 @@ const PaymentIntentSchema = new mongoose.Schema({
   razorpaySignature: { type: String, default: null },
   status: {
     type: String,
-    enum: ['created','authorized','captured','failed','expired','refunded'],
+    enum: ['created', 'authorized', 'captured', 'failed', 'expired', 'refunded'],
     default: 'created'
   },
+
+  gateway: {
+    type: String,
+    enum: ['razorpay', 'orange_pg', 'walletOnly'],
+    default: 'razorpay'
+  },
+
+  merchantTxnNo: {
+    type: String,
+    index: true,
+    sparse: true
+  },
+
+  tranCtx: { type: String, default: null },
+
+  pgTxnId: { type: String, default: null },
+
+  pgResponseCode: { type: String, default: null },
+
+  pgRedirectUrl: { type: String, default: null },
+
   expiresAt: { type: Date },
   idempotencyKey: { type: String, index: true, sparse: true },
   meta: { type: Object, default: {} }
