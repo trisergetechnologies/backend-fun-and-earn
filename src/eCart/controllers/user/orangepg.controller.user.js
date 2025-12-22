@@ -147,6 +147,14 @@ exports.initiateOrangeSale = async (req, res) => {
  */
 exports.handleOrangeCallback = async (req, res) => {
   try {
+    // ============================================================
+    // STEP 1: VALIDATE PAYLOAD (Defensive)
+    // ============================================================
+    if (!req.body || Object.keys(req.body).length === 0) {
+      console.error('[Orange PG Callback] Empty payload received');
+      return res.status(400).send('<h1>Bad Request - Empty Payload</h1>');
+    }
+
     const {
       responseCode,
       respDescription,
@@ -168,61 +176,160 @@ exports.handleOrangeCallback = async (req, res) => {
       merchantTxnNo,
       txnID,
       orderId: addlParam1,
-      paymentIntentId: addlParam2
+      paymentIntentId: addlParam2,
+      hasSecureHash: !!secureHash
     });
 
-    // 1. Verify hash
-    if (!verifyOrangeHash(req.body, secureHash)) {
-      console.error('[Orange PG] Hash verification failed!');
+    // ============================================================
+    // STEP 2: VALIDATE REQUIRED FIELDS
+    // ============================================================
+    const missingFields = [];
+    
+    if (!merchantTxnNo) missingFields.push('merchantTxnNo');
+    if (!addlParam2) missingFields.push('addlParam2 (paymentIntentId)');
+    if (!secureHash) missingFields.push('secureHash');
+    if (!responseCode) missingFields.push('responseCode');
+
+    if (missingFields.length > 0) {
+      console.error('[Orange PG Callback] Missing required fields:', missingFields);
+      return res.status(400).send(`<h1>Bad Request - Missing Fields</h1><p>Missing: ${missingFields.join(', ')}</p>`);
+    }
+
+    // ============================================================
+    // STEP 3: VERIFY HASH
+    // ============================================================
+    let hashValid = false;
+    try {
+      hashValid = verifyOrangeHash(req.body, secureHash);
+    } catch (hashError) {
+      console.error('[Orange PG Callback] Hash verification error:', hashError.message);
+      return res.status(400).send('<h1>Hash Verification Failed</h1>');
+    }
+
+    if (!hashValid) {
+      console.error('[Orange PG Callback] Invalid hash!');
+      console.error('[Orange PG Callback] Received hash:', secureHash.substring(0, 20) + '...');
       return res.status(400).send('<h1>Invalid Signature</h1>');
     }
 
-    // 2. Find PaymentIntent
-    const intent = await PaymentIntent.findById(addlParam2);
+    console.log('[Orange PG Callback] ✅ Hash verified successfully');
+
+    // ============================================================
+    // STEP 4: VALIDATE PAYMENT INTENT ID FORMAT
+    // ============================================================
+    if (!mongoose.Types.ObjectId.isValid(addlParam2)) {
+      console.error('[Orange PG Callback] Invalid PaymentIntent ID format:', addlParam2);
+      return res.status(400).send('<h1>Invalid Payment Intent ID</h1>');
+    }
+
+    // ============================================================
+    // STEP 5: FIND PAYMENT INTENT
+    // ============================================================
+    let intent;
+    try {
+      intent = await PaymentIntent.findById(addlParam2);
+    } catch (dbError) {
+      console.error('[Orange PG Callback] Database error:', dbError.message);
+      return res.status(500).send('<h1>Database Error</h1>');
+    }
+
     if (!intent) {
-      console.error('[Orange PG] PaymentIntent not found:', addlParam2);
+      console.error('[Orange PG Callback] PaymentIntent not found:', addlParam2);
       return res.status(404).send('<h1>Payment Record Not Found</h1>');
     }
 
-    // 3. Idempotency check
+    console.log('[Orange PG Callback] PaymentIntent found:', {
+      intentId: intent._id,
+      currentStatus: intent.status,
+      orderId: intent.referenceId
+    });
+
+    // ============================================================
+    // STEP 6: VALIDATE MERCHANT TXN NO MATCH (Security)
+    // ============================================================
+    if (intent.merchantTxnNo !== merchantTxnNo) {
+      console.error('[Orange PG Callback] merchantTxnNo mismatch!', {
+        expected: intent.merchantTxnNo,
+        received: merchantTxnNo
+      });
+      return res.status(400).send('<h1>Transaction Reference Mismatch</h1>');
+    }
+
+    // ============================================================
+    // STEP 7: IDEMPOTENCY CHECK
+    // ============================================================
     if (intent.status === 'captured') {
-      console.log('[Orange PG] Already processed, redirecting to success...');
-      return res.redirect(`${FRONTEND_URL}/--/success?orderId=${addlParam1}`);
+      console.log('[Orange PG Callback] Already processed as SUCCESS, redirecting...');
+      return res.redirect(`${FRONTEND_URL}/--/success?orderId=${addlParam1 || intent.referenceId}`);
     }
 
     if (intent.status === 'failed') {
-      console.log('[Orange PG] Already marked as failed, redirecting...');
-      return res.redirect(`${FRONTEND_URL}/--/checkout?error=payment_failed`);
+      console.log('[Orange PG Callback] Already processed as FAILED, redirecting...');
+      return res.redirect(`${FRONTEND_URL}/--/checkout?error=payment_already_failed`);
     }
 
-    // 4. Process based on responseCode
+    // ============================================================
+    // STEP 8: PROCESS PAYMENT RESULT
+    // ============================================================
     const isSuccess = responseCode === '000' || responseCode === '0000';
 
     if (isSuccess) {
-      // Success flow
-      await handleOrangePaymentSuccess(intent, addlParam1, {
-        txnID,
-        paymentID,
-        paymentDateTime,
-        amount: parseFloat(amount),
-        paymentMode,
-        paymentSubInstType
-      });
-      
-      console.log(`[Orange PG] ✅ Payment successful for Order ${addlParam1}`);
-      return res.redirect(`${FRONTEND_URL}/--/success?orderId=${addlParam1}`);
-      
+      // SUCCESS FLOW
+      try {
+        await handleOrangePaymentSuccess(intent, addlParam1 || intent.referenceId, {
+          txnID: txnID || 'N/A',
+          paymentID: paymentID || 'N/A',
+          paymentDateTime: paymentDateTime || new Date().toISOString(),
+          amount: amount ? parseFloat(amount) : intent.amount,
+          paymentMode: paymentMode || 'UNKNOWN',
+          paymentSubInstType: paymentSubInstType || 'UNKNOWN',
+          responseCode
+        });
+
+        console.log(`[Orange PG Callback] ✅ Payment successful for Order ${addlParam1}`);
+        return res.redirect(`${FRONTEND_URL}/--/success?orderId=${addlParam1 || intent.referenceId}`);
+
+      } catch (successError) {
+        console.error('[Orange PG Callback] Error in success handler:', successError.message);
+        
+        // Mark as failed since we couldn't process success
+        await PaymentIntent.findByIdAndUpdate(addlParam2, {
+          status: 'failed',
+          'meta.orangePG.error': successError.message
+        }).catch(() => {}); // Ignore update errors
+
+        return res.status(500).send('<h1>Error Processing Payment Success</h1>');
+      }
+
     } else {
-      // Failure flow
-      await handleOrangePaymentFailure(intent, addlParam1, respDescription || 'Payment failed');
-      
-      console.log(`[Orange PG] ❌ Payment failed for Order ${addlParam1}`);
-      return res.redirect(`${FRONTEND_URL}/--/checkout?error=${encodeURIComponent(respDescription || 'payment_failed')}`);
+      // FAILURE FLOW
+      try {
+        await handleOrangePaymentFailure(
+          intent, 
+          addlParam1 || intent.referenceId, 
+          {
+            responseCode,
+            respDescription: respDescription || 'Payment failed'
+          }
+        );
+
+        console.log(`[Orange PG Callback] ❌ Payment failed for Order ${addlParam1}`);
+        return res.redirect(`${FRONTEND_URL}/--/checkout?error=${encodeURIComponent(respDescription || 'payment_failed')}`);
+
+      } catch (failureError) {
+        console.error('[Orange PG Callback] Error in failure handler:', failureError.message);
+        return res.status(500).send('<h1>Error Processing Payment Failure</h1>');
+      }
     }
 
   } catch (err) {
-    console.error('[Orange PG Callback] error:', err.message);
-    return res.status(500).send('<h1>Internal Server Error</h1>');
+    // ============================================================
+    // GLOBAL ERROR HANDLER
+    // ============================================================
+    console.error('[Orange PG Callback] Unhandled error:', err.message);
+    console.error('[Orange PG Callback] Stack:', err.stack);
+    
+    return res.status(500).send(`<h1>Internal Server Error</h1><p>Reference: ${Date.now()}</p>`);
   }
 };
 
@@ -458,6 +565,17 @@ exports.verifyOrangePaymentStatus = async (req, res) => {
  */
 exports.handlePaymentAdvice = async (req, res) => {
   try {
+    // ============================================================
+    // STEP 1: VALIDATE PAYLOAD
+    // ============================================================
+    if (!req.body || Object.keys(req.body).length === 0) {
+      console.error('[Payment Advice] Empty payload received');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Empty payload' 
+      });
+    }
+
     console.log('[Orange PG Payment Advice] Received:', req.body);
 
     const {
@@ -470,44 +588,150 @@ exports.handlePaymentAdvice = async (req, res) => {
       secureHash
     } = req.body;
 
-    // 1. Verify hash
-    if (!verifyOrangeHash(req.body, secureHash)) {
-      console.error('[Payment Advice] Hash verification failed!');
-      return res.status(400).json({ success: false, message: 'Invalid signature' });
+    // ============================================================
+    // STEP 2: VALIDATE REQUIRED FIELDS
+    // ============================================================
+    const missingFields = [];
+    
+    if (!merchantTxnNo) missingFields.push('merchantTxnNo');
+    if (!addlParam2) missingFields.push('addlParam2');
+    if (!secureHash) missingFields.push('secureHash');
+    if (!responseCode) missingFields.push('responseCode');
+
+    if (missingFields.length > 0) {
+      console.error('[Payment Advice] Missing required fields:', missingFields);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Missing fields: ${missingFields.join(', ')}` 
+      });
     }
 
-    // 2. Find PaymentIntent
-    const intent = await PaymentIntent.findById(addlParam2);
+    // ============================================================
+    // STEP 3: VERIFY HASH
+    // ============================================================
+    let hashValid = false;
+    try {
+      hashValid = verifyOrangeHash(req.body, secureHash);
+    } catch (hashError) {
+      console.error('[Payment Advice] Hash verification error:', hashError.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Hash verification failed' 
+      });
+    }
+
+    if (!hashValid) {
+      console.error('[Payment Advice] Invalid hash!');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid signature' 
+      });
+    }
+
+    console.log('[Payment Advice] ✅ Hash verified');
+
+    // ============================================================
+    // STEP 4: VALIDATE PAYMENT INTENT ID FORMAT
+    // ============================================================
+    if (!mongoose.Types.ObjectId.isValid(addlParam2)) {
+      console.error('[Payment Advice] Invalid PaymentIntent ID format:', addlParam2);
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Invalid ID format (ignored)' 
+      });
+    }
+
+    // ============================================================
+    // STEP 5: FIND PAYMENT INTENT
+    // ============================================================
+    let intent;
+    try {
+      intent = await PaymentIntent.findById(addlParam2);
+    } catch (dbError) {
+      console.error('[Payment Advice] Database error:', dbError.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Database error' 
+      });
+    }
+
     if (!intent) {
       console.warn('[Payment Advice] PaymentIntent not found:', addlParam2);
-      return res.status(200).json({ success: true, message: 'Intent not found (ignored)' });
+      // Return 200 to prevent retries from Orange PG
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Intent not found (ignored)' 
+      });
     }
 
-    // 3. Idempotency check
+    console.log('[Payment Advice] PaymentIntent found:', {
+      intentId: intent._id,
+      currentStatus: intent.status
+    });
+
+    // ============================================================
+    // STEP 6: IDEMPOTENCY CHECK
+    // ============================================================
     if (intent.status === 'captured' || intent.status === 'failed') {
       console.log('[Payment Advice] Already processed, ignoring...');
-      return res.status(200).json({ success: true, message: 'Already processed' });
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Already processed' 
+      });
     }
 
-    // 4. Process advice
+    // ============================================================
+    // STEP 7: PROCESS ADVICE
+    // ============================================================
     const isSuccess = responseCode === '000' || responseCode === '0000';
 
-    if (isSuccess) {
-      await handleOrangePaymentSuccess(intent, addlParam1, {
-        txnID,
-        paymentID,
-        paymentDateTime: req.body.paymentDateTime,
-        amount: parseFloat(req.body.amount)
+    try {
+      if (isSuccess) {
+        await handleOrangePaymentSuccess(intent, addlParam1 || intent.referenceId, {
+          txnID: txnID || 'N/A',
+          paymentID: paymentID || 'N/A',
+          paymentDateTime: req.body.paymentDateTime || new Date().toISOString(),
+          amount: req.body.amount ? parseFloat(req.body.amount) : intent.amount,
+          paymentMode: req.body.paymentMode || 'UNKNOWN',
+          paymentSubInstType: req.body.paymentSubInstType || 'UNKNOWN',
+          responseCode
+        });
+
+        console.log('[Payment Advice] ✅ Payment marked as success');
+      } else {
+        await handleOrangePaymentFailure(
+          intent, 
+          addlParam1 || intent.referenceId, 
+          {
+            responseCode,
+            respDescription: req.body.respDescription || 'Payment failed'
+          }
+        );
+
+        console.log('[Payment Advice] ❌ Payment marked as failed');
+      }
+
+      return res.status(200).json({ success: true });
+
+    } catch (processError) {
+      console.error('[Payment Advice] Processing error:', processError.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Processing error' 
       });
-    } else {
-      await handleOrangePaymentFailure(intent, addlParam1, req.body.respDescription || 'Payment failed');
     }
 
-    return res.status(200).json({ success: true });
-
   } catch (err) {
-    console.error('[Payment Advice] error:', err.message);
-    return res.status(500).json({ success: false, message: err.message });
+    // ============================================================
+    // GLOBAL ERROR HANDLER
+    // ============================================================
+    console.error('[Payment Advice] Unhandled error:', err.message);
+    console.error('[Payment Advice] Stack:', err.stack);
+    
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
   }
 };
 
