@@ -18,7 +18,7 @@ eCartUserRouter.use('/order', userOrderRouter);
 eCartUserRouter.use('/wallet', userWalletRouter);
 eCartUserRouter.use('/general', userGeneralRouter);
 eCartUserRouter.use('/payment', userPaymentRouter);
-eCartUserRouter.use('/payment', orangePGRouter);
+eCartUserRouter.use('/orange', orangePGRouter);
 
 
 const getCategories = async (req, res)=>{
