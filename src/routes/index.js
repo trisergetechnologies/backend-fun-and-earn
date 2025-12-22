@@ -18,10 +18,10 @@ router.use('/shortvideo', shortVideoRouter);
 
 
 // Orange PG payment callback (Form POST from Orange PG after payment)
-orangePGRouter.post('/public/orange/callback', handleOrangeCallback);
+router.post('/public/orange/callback', handleOrangeCallback);
 
 // Orange PG payment advice webhook (async notification from bank)
-orangePGRouter.post('/public/orange/paymentadvice', handlePaymentAdvice);
+router.post('/public/orange/paymentadvice', handlePaymentAdvice);
 
 
 
