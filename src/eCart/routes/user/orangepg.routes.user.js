@@ -4,7 +4,7 @@
 // ================================================================
 
 const express = require('express');
-const { initiateOrangeSale, verifyOrangePaymentStatus, handleOrangeCallback, handlePaymentAdvice } = require('../../controllers/user/orangepg.controller.user');
+const { initiateOrangeSale, verifyOrangePaymentStatus, handleOrangeCallback, handlePaymentAdvice} = require('../../controllers/user/orangepg.controller.user');
 
 const orangePGRouter = express.Router();
 
