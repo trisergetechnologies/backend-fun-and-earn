@@ -175,11 +175,9 @@ exports.getEarnings = async (req, res) => {
 
 function getISTSummaryDates() {
   const nowUTC = new Date();
-
-  // Convert now → IST
   const nowIST = new Date(nowUTC.getTime() + 5.5 * 60 * 60 * 1000);
 
-  // IST start of today (00:00 IST)
+  // IST start of today
   const istStartOfToday = new Date(
     nowIST.getFullYear(),
     nowIST.getMonth(),
@@ -187,7 +185,15 @@ function getISTSummaryDates() {
     0, 0, 0, 0
   );
 
-  // IST start of 7 days ago (calendar-based)
+  // IST start of tomorrow
+  const istStartOfTomorrow = new Date(
+    nowIST.getFullYear(),
+    nowIST.getMonth(),
+    nowIST.getDate() + 1,
+    0, 0, 0, 0
+  );
+
+  // IST start of 7 days ago
   const istStartOfWeek = new Date(
     nowIST.getFullYear(),
     nowIST.getMonth(),
@@ -195,18 +201,10 @@ function getISTSummaryDates() {
     0, 0, 0, 0
   );
 
-  // Convert IST → UTC (what MongoDB needs)
-  const startOfTodayUTC = new Date(
-    istStartOfToday.getTime() - 5.5 * 60 * 60 * 1000
-  );
-
-  const oneWeekAgoUTC = new Date(
-    istStartOfWeek.getTime() - 5.5 * 60 * 60 * 1000
-  );
-
   return {
-    startOfToday: startOfTodayUTC,
-    oneWeekAgo: oneWeekAgoUTC
+    startOfToday: new Date(istStartOfToday.getTime() - 5.5 * 60 * 60 * 1000),
+    startOfTomorrow: new Date(istStartOfTomorrow.getTime() - 5.5 * 60 * 60 * 1000),
+    oneWeekAgo: new Date(istStartOfWeek.getTime() - 5.5 * 60 * 60 * 1000)
   };
 }
 
@@ -216,7 +214,7 @@ exports.getSummary = async (req, res) => {
   try {
     const userId = req.user?._id
 
-    const { startOfToday, oneWeekAgo } = getISTSummaryDates();
+   const { startOfToday, startOfTomorrow, oneWeekAgo } = getISTSummaryDates();
 
     // const now = new Date();
 
@@ -230,33 +228,34 @@ exports.getSummary = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          status: 'success', // only successful entries
-        }
+          status: "success", // only successful entries
+        },
       },
       {
         $group: {
           _id: null,
-          totalEarning: { $sum: '$amount' },
+          totalEarning: { $sum: "$amount" },
           lastWeekEarning: {
             $sum: {
-              $cond: [
-                { $gte: ['$createdAt', oneWeekAgo] },
-                '$amount',
-                0
-              ]
-            }
+              $cond: [{ $gte: ["$createdAt", oneWeekAgo] }, "$amount", 0],
+            },
           },
           todayEarning: {
             $sum: {
               $cond: [
-                { $gte: ['$createdAt', startOfToday] },
-                '$amount',
-                0
-              ]
-            }
-          }
-        }
-      }
+                {
+                  $and: [
+                    { $gte: ["$createdAt", startOfToday] },
+                    { $lt: ["$createdAt", startOfTomorrow] },
+                  ],
+                },
+                "$amount",
+                0,
+              ],
+            },
+          },
+        },
+      },
     ]);
 
     return res.json({
