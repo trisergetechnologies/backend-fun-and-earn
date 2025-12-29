@@ -173,18 +173,58 @@ exports.getEarnings = async (req, res) => {
   }
 };
 
+function getISTSummaryDates() {
+  const nowUTC = new Date();
+
+  // Convert now → IST
+  const nowIST = new Date(nowUTC.getTime() + 5.5 * 60 * 60 * 1000);
+
+  // IST start of today (00:00 IST)
+  const istStartOfToday = new Date(
+    nowIST.getFullYear(),
+    nowIST.getMonth(),
+    nowIST.getDate(),
+    0, 0, 0, 0
+  );
+
+  // IST start of 7 days ago (calendar-based)
+  const istStartOfWeek = new Date(
+    nowIST.getFullYear(),
+    nowIST.getMonth(),
+    nowIST.getDate() - 7,
+    0, 0, 0, 0
+  );
+
+  // Convert IST → UTC (what MongoDB needs)
+  const startOfTodayUTC = new Date(
+    istStartOfToday.getTime() - 5.5 * 60 * 60 * 1000
+  );
+
+  const oneWeekAgoUTC = new Date(
+    istStartOfWeek.getTime() - 5.5 * 60 * 60 * 1000
+  );
+
+  return {
+    startOfToday: startOfTodayUTC,
+    oneWeekAgo: oneWeekAgoUTC
+  };
+}
+
+
 exports.getSummary = async (req, res) => {
 
   try {
     const userId = req.user?._id
 
-    const now = new Date();
+    const { startOfToday, oneWeekAgo } = getISTSummaryDates();
 
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
+    // const now = new Date();
 
-    const oneWeekAgo = new Date(now);
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    // const startOfToday = new Date(now);
+    // startOfToday.setHours(0, 0, 0, 0);
+
+    // const oneWeekAgo = new Date(now);
+    // oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
     const [result] = await EarningLog.aggregate([
       {
