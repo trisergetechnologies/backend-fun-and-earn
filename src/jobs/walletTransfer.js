@@ -15,7 +15,7 @@ cron.schedule('0 6 * * *', async () => {
     const admin = await User.findOne({email: ADMIN_EMAIL});
     const token = admin?.token;
 
-    const response = await axios.put(URL, {}, {headers: {Authorization: `Bearer ${token}`}});
+    const response = await axios.put(URL, {}, {headers: {Authorization: `Bearer ${token}`}, timeout: 10 * 60 * 1000});
 
     console.log('✅ API Response Success:', response.data.success);
   } catch (error) {

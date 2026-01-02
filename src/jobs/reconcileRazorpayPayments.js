@@ -25,7 +25,7 @@ const razorpay = new Razorpay({
  * Run this job every 10–15 minutes via node-cron or a system scheduler.
  */
 async function reconcileRazorpayPayments() {
-  console.log(`[Reconcile] Starting Razorpay payment reconciliation at ${new Date().toISOString()}`);
+  // console.log(`[Reconcile] Starting Razorpay payment reconciliation at ${new Date().toISOString()}`);
 
   const cutoffTime = new Date(Date.now() - 15 * 60 * 1000); // older than 15 mins
 
@@ -34,7 +34,7 @@ async function reconcileRazorpayPayments() {
     expiresAt: { $lt: new Date() } // already past expiry window
   }).limit(50);
 
-  console.log(`[Reconcile] Found ${staleIntents.length} stale payment intents.`);
+  // console.log(`[Reconcile] Found ${staleIntents.length} stale payment intents.`);
 
   for (const intent of staleIntents) {
     try {
@@ -44,7 +44,7 @@ async function reconcileRazorpayPayments() {
       const payments = await razorpay.orders.fetchPayments(intent.razorpayOrderId);
 
       if (!payments || !payments.items || payments.items.length === 0) {
-        console.log(`[Reconcile] No payments found for order ${intent.razorpayOrderId}`);
+        // console.log(`[Reconcile] No payments found for order ${intent.razorpayOrderId}`);
         await markAsFailed(intent, 'No payments attempted.');
         continue;
       }
@@ -54,22 +54,22 @@ async function reconcileRazorpayPayments() {
       const allFailed = payments.items.every(p => p.status === 'failed' || p.status === 'created');
 
       if (anyCaptured) {
-        console.log(`[Reconcile] Payment already captured for intent ${intent._id}`);
+        // console.log(`[Reconcile] Payment already captured for intent ${intent._id}`);
         continue; // webhook likely processed this
       }
 
       if (allFailed) {
-        console.log(`[Reconcile] All payment attempts failed for order ${intent.razorpayOrderId}`);
+        // console.log(`[Reconcile] All payment attempts failed for order ${intent.razorpayOrderId}`);
         await markAsFailed(intent, 'All payment attempts failed (auto-reconcile).');
       } else {
-        console.log(`[Reconcile] Payment still pending for order ${intent.razorpayOrderId}`);
+        // console.log(`[Reconcile] Payment still pending for order ${intent.razorpayOrderId}`);
       }
     } catch (err) {
       console.error(`[Reconcile] Error checking intent ${intent._id}:`, err.message);
     }
   }
 
-  console.log(`[Reconcile] Razorpay reconciliation complete.`);
+  // console.log(`[Reconcile] Razorpay reconciliation complete.`);
 }
 
 async function markAsFailed(intent, reason) {
