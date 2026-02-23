@@ -248,10 +248,10 @@ exports.requestWithdrawal = async (req, res) => {
     const user = req.user;
     const { amount } = req.body;
 
-    if (!amount || amount <= 0) {
+    if (!amount || amount < 100) {
       return res.status(200).json({
         success: false,
-        message: "Invalid withdrawal amount",
+        message: "Amount Should Be More Than 100.",
         data: null
       });
     }

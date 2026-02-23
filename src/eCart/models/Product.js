@@ -68,6 +68,11 @@ const ProductSchema = new mongoose.Schema({
     default: false
   },
 
+  package:{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Package'
+  },
+
   createdByRole: {
     type: String,
     enum: ['admin', 'seller'],

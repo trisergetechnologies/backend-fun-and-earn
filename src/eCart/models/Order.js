@@ -136,6 +136,11 @@ const OrderSchema = new mongoose.Schema({
     default: 0
   },
 
+  isPackageCronProcessed: {
+    type: Boolean,
+    default: false
+  },
+
   trackingUpdates: [{
   status: {
     type: String,

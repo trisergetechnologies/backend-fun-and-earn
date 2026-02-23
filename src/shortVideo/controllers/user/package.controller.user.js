@@ -462,3 +462,126 @@ exports.getPackageOrders = async (req, res) => {
     });
   }
 };
+
+
+
+exports.purchasePackageInternal = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const userId = req.user._id;
+    const { packageId, orderId = 'N/A' } = req.body;
+
+    const user = await User.findById(userId)
+    .session(session)
+    .populate('package');
+    if (!user) throw new Error('User not found');
+
+    // if (!user.wallets.shortVideoWallet || user.wallets.shortVideoWallet <= 0) {
+    //   throw new Error('Insufficient balance');
+    // }
+
+    // If same package already purchased
+    if (user.package && String(user.package._id) === packageId) {
+      await session.abortTransaction();
+      return res.status(200).json({
+        success: false,
+        message: 'Package already purchased'
+      });
+    }
+
+    const selectedPackage = await Package.findById(packageId).session(session);
+    if (!selectedPackage || !selectedPackage.isActive) {
+      await session.abortTransaction();
+      return res.status(200).json({ success: false, message: 'Invalid or inactive package' });
+    }
+
+    // if (user.wallets.shortVideoWallet < selectedPackage.price) {
+    //   await session.abortTransaction();
+    //   return res.status(200).json({ success: false, message: 'Insufficient wallet balance' });
+    // }
+
+    // Assign serial number only if first-time purchase
+    let assignedSerial = user.serialNumber;
+    if (!assignedSerial) {
+      const lastUserWithSerial = await User.findOne({ serialNumber: { $ne: null } })
+        .sort({ serialNumber: -1 })
+        .select('serialNumber')
+        .session(session);
+
+      assignedSerial = lastUserWithSerial ? lastUserWithSerial.serialNumber + 1 : 1;
+      user.serialNumber = assignedSerial;
+    }
+
+    // Deduct amount
+    // user.wallets.shortVideoWallet -= selectedPackage.price;
+
+    // Assign package and serial
+    user.package = selectedPackage._id;
+    
+    user.isActive = true;
+    // Save user
+    await user.save({ session });
+
+    await new PackageOrder({
+      buyerId: user._id,
+      packageId: selectedPackage._id,
+
+      packageSnapshot: {
+        name: selectedPackage.name,
+        price: selectedPackage.price,
+        membersUpto: selectedPackage.membersUpto,
+        description: selectedPackage.description || '',
+        color: selectedPackage.color || '',
+        icon: selectedPackage.icon || ''
+      },
+
+      source: 'user',               // because user initiated purchase
+      fromWallet: 'externalPayment', // matches the wallet deducted from
+      amount: selectedPackage.price,
+      status: 'success',            // since transaction succeeded here
+      triggeredBy: 'user',
+      notes: `Purchased ${selectedPackage.name} package from order id ${orderId}`
+    }).save({ session });
+
+
+    // Trigger earnings (non-blocking after commit)
+    await session.commitTransaction();
+    session.endSession();
+
+
+
+    const result1 = await distributeTeamPurchaseEarnings(user._id, selectedPackage.price);
+    await captureLeftovers(result1);
+
+    const result2 = await distributeNetworkPurchaseEarnings(user);
+    await captureLeftovers(result2);
+
+    await checkAndAssignAchievements(user);
+    await checkAndAssignMonthlyAchievements(user);
+
+
+
+    return res.status(200).json({
+      success: true,
+      message: `${selectedPackage.name} package purchased successfully`,
+      data: {
+        serialNumber: user.serialNumber,
+        package: selectedPackage.name,
+        // balance: user.wallets.shortVideoWallet
+        balance: null
+      }
+    });
+
+  } catch (err) {
+    console.error('Purchase Package Error:', err);
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to purchase package'
+    });
+  }
+};
