@@ -11,9 +11,30 @@ const cors = require('cors');
 const router = require('./routes');
 const path = require('path');
 const { paymentWebhook } = require('./eCart/controllers/user/payment.controller.user.js');
-require('./jobs/walletTransfer.js')
-require('./jobs/reconcileRazorpayPayments.js')
-require('./jobs/packageBuyCron.js')
+// require('./jobs/walletTransfer.js')
+// require('./jobs/reconcileRazorpayPayments.js')
+// require('./jobs/packageBuyCron.js')
+
+try {
+  require('./jobs/walletTransfer');
+  console.log('walletTransfer loaded');
+} catch (e) {
+  console.error('walletTransfer failed', e);
+}
+
+try {
+  require('./jobs/reconcileRazorpayPayments');
+  console.log('reconcileRazorpayPayments loaded');
+} catch (e) {
+  console.error('reconcileRazorpayPayments failed', e);
+}
+
+try {
+  require('./jobs/packageBuyCron');
+  console.log('packageBuyCron loaded');
+} catch (e) {
+  console.error('packageBuyCron failed', e);
+}
 
 /**
  * Creates a new Express application with base configuration
