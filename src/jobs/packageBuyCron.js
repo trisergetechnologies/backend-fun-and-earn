@@ -1,3 +1,5 @@
+console.log("🔥 packageBuyCron loaded");
+
 const cron = require('node-cron');
 const axios = require('axios');
 const Order = require('../eCart/models/Order');

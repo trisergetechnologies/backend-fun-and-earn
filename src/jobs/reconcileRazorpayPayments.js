@@ -1,4 +1,5 @@
 // jobs/reconcileRazorpayPayments.js
+console.log("🔥 reconcileRazorpayPayments loaded");
 'use strict';
 
 const Razorpay = require('razorpay');
