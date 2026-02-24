@@ -4,7 +4,8 @@
  * Creates and configures the Express application with common middleware.
  * This setup is environment-agnostic - same for dev, prod, and test.
  */
-
+const mongoose = require('mongoose');
+const os = require('os');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -79,7 +80,40 @@ const createApp = () => {
   app.get('/health', (req, res) => {
     res.status(200).json({
       status: 'UP',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+
+      process: {
+        pid: process.pid,
+        uptimeSeconds: process.uptime(),
+        nodeVersion: process.version,
+        env: process.env.NODE_ENV || 'undefined'
+      },
+
+      memory: {
+        rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+      },
+
+      system: {
+        hostname: os.hostname(),
+        platform: os.platform(),
+        cpuLoad: os.loadavg()
+      },
+
+      mongodb: {
+        state: mongoose.connection.readyState, // 1 = connected
+        host: mongoose.connection.host,
+        name: mongoose.connection.name
+      },
+
+      crons: global.__CRON_DEBUG__,
+
+      envVarsPresent: {
+        RAZORPAY_KEY_ID: !!process.env.RAZORPAY_KEY_ID,
+        RAZORPAY_SECRET: !!process.env.RAZORPAY_SECRET,
+        MONGO_URI: !!process.env.MONGO_URI
+      }
     });
   });
 

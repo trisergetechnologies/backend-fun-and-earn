@@ -8,7 +8,7 @@ const Package = require('../models/Package');
 const Product = require('../eCart/models/Product');
 
 // Replace with your actual internal API base URL
-const INTERNAL_API_BASE = 'https://api.mpdreams.in/api/v1/shortvideo/user/package/purchasepackageinternal'
+const INTERNAL_API_BASE = 'https://amp-api.mpdreams.in/api/v1/shortvideo/user/package/purchasepackageinternal'
 
 cron.schedule('*/3 * * * *', async () => {
   console.log('[PackageCron] Running at', new Date().toISOString());
