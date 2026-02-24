@@ -340,6 +340,7 @@ exports.createOrderIntent = async (req, res) => {
       totalAmount: subtotal,
       finalAmountPaid: remaining, // amount expected to be paid via Razorpay (0 if wallet covered)
       totalGstAmount: cart.totalGstAmount || 0,
+      deliveryCharge: cart?.deliveryCharge || 0,
       paymentStatus: remaining > 0 ? 'pending' : 'paid',
       status: 'placed',
       paymentInfo: {

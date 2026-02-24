@@ -158,4 +158,11 @@ const OrderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+OrderSchema.pre('save', function (next) {
+  if (this.isPackageCronProcessed === undefined || this.isPackageCronProcessed === null) {
+    this.isPackageCronProcessed = false;
+  }
+  next();
+});
+
 module.exports = mongoose.model('Order', OrderSchema);
