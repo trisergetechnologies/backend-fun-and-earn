@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
-const { distributeTeamWithdrawalEarnings } = require('../../../shortVideo/helpers/distributeTeamWithdrawalEarnings');
-const { distributeNetworkWithdrawalEarnings } = require('../../../shortVideo/helpers/distributeNetworkWithdrawalEarnings');
 const Coupon = require('../../../models/Coupon');
 const WithdrawalRequest = require('../../models/WithdrawalRequest');
 
@@ -146,10 +144,6 @@ exports.withdrawFunds = async (req, res) => {
     tx.notes = `Withdrawal successful (Txn ID: ${payoutResult.transactionId})`;
     await tx.save();
 
-    // Trigger earnings distribution
-    await distributeTeamWithdrawalEarnings(userId, amount);
-    await distributeNetworkWithdrawalEarnings(user, amount);
-    
     return res.status(200).json({
       success: true,
       message: 'Withdrawal processed successfully',

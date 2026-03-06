@@ -2,7 +2,7 @@ const express = require('express');
 const { purchasePackage, getPackages, getMyAchievement, getPackageOrders, getMyMonthlyAchievement, purchasePackageInternal } = require('../../controllers/user/package.controller.user');
 const userPackageRouter = express.Router();
 
-userPackageRouter.post('/purchasepackage', purchasePackage);
+// userPackageRouter.post('/purchasepackage', purchasePackage);
 userPackageRouter.get('/getpackage', getPackages);
 userPackageRouter.get('/getpackageorders', getPackageOrders);
 

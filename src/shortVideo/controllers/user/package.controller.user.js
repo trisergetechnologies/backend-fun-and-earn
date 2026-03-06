@@ -145,14 +145,9 @@ exports.getPackages = async (req, res) => {
       currentPackage = user?.package || null;
 
       if (!currentPackage) {
-        // User hasn't purchased any package
         availablePackages = allPackages;
-      } else if (currentPackage.name === 'Gold') {
-        // User has Gold, only allow Diamond
-        availablePackages = allPackages.filter(pkg => pkg.name === 'Diamond');
-      } else if (currentPackage.name === 'Diamond') {
-        // User has Diamond, no further upgrade
-        availablePackages = [];
+      } else {
+        availablePackages = allPackages.filter(pkg => pkg.price > currentPackage.price);
       }
     } else {
       // If not logged in, show all active packages (optional)

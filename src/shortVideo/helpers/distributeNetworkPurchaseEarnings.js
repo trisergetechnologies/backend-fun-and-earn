@@ -1,6 +1,7 @@
 const User = require('../../models/User');
 const EarningLog = require('../models/EarningLog');
 const Package = require('../../models/Package');
+const { getDistributionConfig } = require('../../config/packageDistributionConfig');
 
 /**
  * Network Purchase Distribution
@@ -29,7 +30,7 @@ exports.distributeNetworkPurchaseEarnings = async (newUser) => {
     for (const user of allUsers) {
       if (!user.package || user._id.equals(newUser._id)) continue;
 
-      const maxRange = user.package.name === 'Diamond' ? 20 : 10;
+      const maxRange = getDistributionConfig(user.package.name).networkRange;
 
       // ✅ Only ABOVE (uplines)
       const isInRange =

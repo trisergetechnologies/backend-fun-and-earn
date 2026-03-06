@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const PackageSchema = new mongoose.Schema({
   name: {
     type: String,
-    enum: ['Gold', 'Diamond'],
+    enum: ['Basic', 'Starter', 'Gold', 'Diamond'],
     required: true,
     unique: true
   },

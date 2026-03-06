@@ -1,6 +1,7 @@
 const User = require("../../models/User");
 const EarningLog = require("../models/EarningLog");
 const Package = require('../../models/Package');
+const { getDistributionConfig } = require('../../config/packageDistributionConfig');
 
 /**
  * Network Withdrawal Distribution
@@ -20,7 +21,7 @@ exports.distributeNetworkWithdrawalEarnings = async (user, withdrawalAmount) => 
 
     for (const u of allUsers) {
 
-      const maxRange = u.package.name === 'Diamond' ? 20 : 10;
+      const maxRange = getDistributionConfig(u.package.name).networkRange;
 
       const isInRange =
         Math.abs(u.serialNumber - currentSN) <= maxRange &&

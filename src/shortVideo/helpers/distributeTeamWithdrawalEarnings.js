@@ -1,6 +1,7 @@
 const User = require("../../models/User");
 const EarningLog = require("../models/EarningLog");
 const Package = require('../../models/Package');
+const { getDistributionConfig } = require('../../config/packageDistributionConfig');
 
 const TEAM_WITHDRAWAL_PERCENTAGES = [5, 2, 1.5, 1.25, 1.10, 1, 0.9, 0.8, 0.7, 0.6];
 
@@ -72,7 +73,7 @@ exports.distributeTeamWithdrawalEarnings = async (userId, withdrawalAmount) => {
       const referrer = await User.findOne({ referralCode: currentReferral }).populate('package');
       if (!referrer || !referrer.package) break;
 
-      const maxEarningLevel = referrer.package.name === 'Diamond' ? 10 : 5;
+      const maxEarningLevel = getDistributionConfig(referrer.package.name).teamLevels;
 
       if (level < maxEarningLevel) {
         const percent = TEAM_WITHDRAWAL_PERCENTAGES[level];

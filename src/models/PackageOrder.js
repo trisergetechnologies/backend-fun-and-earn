@@ -19,7 +19,7 @@ const PackageOrderSchema = new mongoose.Schema({
   packageSnapshot: {
     name: {
       type: String,
-      enum: ['Gold', 'Diamond'],
+      enum: ['Basic', 'Starter', 'Gold', 'Diamond'],
       required: true
     },
     price: {

@@ -2,6 +2,7 @@ const User = require("../../../models/User");
 const Package = require("../../../models/Package");
 const EarningLog = require("../../models/EarningLog");
 const mongoose = require('mongoose')
+const { getDistributionConfig } = require('../../../config/packageDistributionConfig');
 
 async function buildReferralTree(referralCode) {
   // Find all users who were referred using this referral code
@@ -92,7 +93,7 @@ exports.getNetwork = async (req, res) => {
     }
 
     const currentSerial = user.serialNumber;
-    const reach = user.package.name === 'Diamond' ? 20 : 10;
+    const reach = getDistributionConfig(user.package.name).networkRange;
 
     const minSerial = currentSerial - reach;
     const maxSerial = currentSerial + reach;
