@@ -285,3 +285,70 @@ exports.rechargeShortVideoWallet = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal Server Error', data: null });
   }
 };
+
+/**
+ * Admin deduct from user's Fun & Enjoy (shortVideo) wallet.
+ * Used when admin recharged for a purchase but user did not buy anything.
+ */
+exports.deductShortVideoWallet = async (req, res) => {
+  try {
+    const admin = req.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return res.status(200).json({ success: false, message: 'Unauthorized', data: null });
+    }
+
+    const { userId, amount } = req.body;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(200).json({ success: false, message: 'Invalid or missing user ID', data: null });
+    }
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(200).json({ success: false, message: 'Invalid amount', data: null });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ success: false, message: 'User not found', data: null });
+    }
+
+    const currentBalance = user.wallets?.shortVideoWallet || 0;
+    if (currentBalance < amount) {
+      return res.status(200).json({
+        success: false,
+        message: `Insufficient balance. Available: ₹${currentBalance.toFixed(2)}`,
+        data: null
+      });
+    }
+
+    user.wallets.shortVideoWallet = Math.max(0, currentBalance - amount);
+    await user.save();
+
+    await WalletTransaction.create({
+      userId: user._id,
+      type: 'spend',
+      fromWallet: 'shortVideoWallet',
+      toWallet: null,
+      source: 'admin',
+      amount,
+      status: 'success',
+      triggeredBy: 'admin',
+      notes: `Admin deduction by ${admin.name}`
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `₹${amount} deducted from Fun & Enjoy wallet`,
+      data: {
+        userId: user._id,
+        name: user.name,
+        newBalance: user.wallets.shortVideoWallet
+      }
+    });
+
+  } catch (err) {
+    console.error('Admin Deduct Error:', err);
+    return res.status(500).json({ success: false, message: 'Internal Server Error', data: null });
+  }
+};
