@@ -7,6 +7,7 @@ const User = require('../../../models/User');
 const Product = require('../../models/Product');
 const PaymentIntent = require('../../models/PaymentIntent');
 const Order = require('../../models/Order');
+const Cart = require('../../models/Cart');
 const Razorpay = require('razorpay');
 
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
@@ -87,7 +88,10 @@ exports.verifyPayment = async (req, res) => {
 
     await order.save({ session });
 
-    // Step 6: Commit transaction
+    // Step 6: Clear cart now that payment is confirmed
+    await Cart.deleteOne({ userId: order.buyerId }).session(session);
+
+    // Step 7: Commit transaction
     await session.commitTransaction();
     session.endSession();
 
@@ -156,6 +160,9 @@ async function handlePaymentCaptured(intent, paymentPayload) {
       note: 'Auto-confirmed via Razorpay webhook'
     });
     await order.save({ session });
+
+    // Clear cart now that payment is confirmed
+    await Cart.deleteOne({ userId: order.buyerId }).session(session);
 
     await session.commitTransaction();
     session.endSession();

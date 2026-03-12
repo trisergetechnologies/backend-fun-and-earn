@@ -45,7 +45,11 @@ const OrderItemSchema = new mongoose.Schema({
   returnPolicyDays: {
     type: Number,
     default: 3
-  }
+  },
+  selectedVariation: [{
+    name: { type: String },
+    value: { type: String }
+  }]
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({

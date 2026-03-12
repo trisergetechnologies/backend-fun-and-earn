@@ -82,7 +82,8 @@ exports.placeOrder = async (req, res) => {
         finalPriceAtPurchase: product.finalPrice,
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
-        returnPolicyDays: product.returnPolicyDays || 3
+        returnPolicyDays: product.returnPolicyDays || 3,
+        selectedVariation: item.selectedVariation || []
       });
 
       // Deduct stock
@@ -280,7 +281,8 @@ exports.createOrderIntent = async (req, res) => {
         finalPriceAtPurchase: product.finalPrice,
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
-        returnPolicyDays: product.returnPolicyDays || 3
+        returnPolicyDays: product.returnPolicyDays || 3,
+        selectedVariation: item.selectedVariation || []
       });
     }
 
@@ -366,8 +368,10 @@ exports.createOrderIntent = async (req, res) => {
 
     await paymentIntentDoc.save({ session });
 
-    // Step 8: Clear cart (we preserve order but empty cart)
-    await Cart.deleteOne({ userId: user._id }, { session });
+    // Step 8: Clear cart only if wallet-only (remaining === 0), otherwise keep cart until payment confirmed
+    if (remaining <= 0) {
+      await Cart.deleteOne({ userId: user._id }, { session });
+    }
 
     // Commit DB transaction: wallet deducted, stock reserved, order & paymentIntent stored
     await session.commitTransaction();
@@ -562,7 +566,8 @@ exports.placeOrderWalletOnly = async (req, res) => {
         finalPriceAtPurchase: product.finalPrice,
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
-        returnPolicyDays: product.returnPolicyDays || 3
+        returnPolicyDays: product.returnPolicyDays || 3,
+        selectedVariation: item.selectedVariation || []
       });
 
       // Deduct stock
@@ -1454,7 +1459,8 @@ exports.createOrderIntentOrangePG = async (req, res) => {
         finalPriceAtPurchase: product.finalPrice,
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
-        returnPolicyDays: product.returnPolicyDays || 3
+        returnPolicyDays: product.returnPolicyDays || 3,
+        selectedVariation: item.selectedVariation || []
       });
     }
 
@@ -1557,9 +1563,11 @@ exports.createOrderIntentOrangePG = async (req, res) => {
     await paymentIntentDoc.save({ session });
 
     // ============================================================
-    // STEP 8: Clear Cart
+    // STEP 8: Clear Cart only if wallet-only (remaining === 0)
     // ============================================================
-    await Cart.deleteOne({ userId: user._id }, { session });
+    if (remaining <= 0) {
+      await Cart.deleteOne({ userId: user._id }, { session });
+    }
 
     // ============================================================
     // STEP 9: Commit Transaction

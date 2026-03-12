@@ -1,6 +1,6 @@
 const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
-const DELIVERY_CHARGE = 100;
+const Settings = require("../../../models/Settings");
 
 exports.getCart = async (req, res) => {
   try {
@@ -30,8 +30,19 @@ exports.getCart = async (req, res) => {
       }
     });
 
-    const hasSpecialItem = cart.items.some(item => item.productId.isSpecial);
-    cart.deliveryCharge = hasSpecialItem ? DELIVERY_CHARGE : 0;
+    const settings = await Settings.findOne();
+    if (settings?.deliveryMode === 'always_charge') {
+      cart.deliveryCharge = settings.deliveryChargeAmount || 0;
+    } else if (settings?.deliveryMode === 'free_above_amount') {
+      const subtotal = cart.items.reduce((sum, item) => {
+        return sum + ((item.productId?.finalPrice || 0) * (item.quantity || 1));
+      }, 0);
+      cart.deliveryCharge = subtotal >= (settings.freeDeliveryAbove || 0)
+        ? 0
+        : (settings.deliveryChargeAmount || 0);
+    } else {
+      cart.deliveryCharge = 0;
+    }
 
     // 🔹 Round to 2 decimals
     totalGstAmount = Number(totalGstAmount.toFixed(2));
@@ -58,9 +69,8 @@ exports.getCart = async (req, res) => {
 exports.addCart = async (req, res) => {
   try {
     const user = req.user;
-    const { productId, quantity } = req.body;
+    const { productId, quantity, selectedVariation } = req.body;
 
-    // 🔒 Only 'user' role can modify cart
     if (user.role !== 'user') {
       return res.status(200).json({
         success: false,
@@ -69,7 +79,6 @@ exports.addCart = async (req, res) => {
       });
     }
 
-    // ❌ Basic validation
     if (!productId || quantity <= 0) {
       return res.status(200).json({
         success: false,
@@ -78,7 +87,6 @@ exports.addCart = async (req, res) => {
       });
     }
 
-    // 🛒 Find and verify product
     const product = await Product.findOne({ _id: productId, isActive: true });
     if (!product || product.stock < quantity) {
       return res.status(200).json({
@@ -88,13 +96,29 @@ exports.addCart = async (req, res) => {
       });
     }
 
-    // 🛍️ Get or create cart for user
+    // Validate that all required variations are selected
+    if (product.variations && product.variations.length > 0) {
+      const selected = selectedVariation || [];
+      for (const v of product.variations) {
+        const match = selected.find(s => s.name === v.name);
+        if (!match || !v.options.includes(match.value)) {
+          return res.status(200).json({
+            success: false,
+            message: `Please select a valid option for ${v.name}`,
+            data: null
+          });
+        }
+      }
+    }
+
     let cart = await Cart.findOne({ userId: user._id });
+
+    const variationArr = selectedVariation || [];
 
     if (!cart) {
       cart = new Cart({
         userId: user._id,
-        items: [{ productId, quantity }]
+        items: [{ productId, quantity, selectedVariation: variationArr }]
       });
 
       await cart.save();
@@ -105,7 +129,7 @@ exports.addCart = async (req, res) => {
       });
     }
 
-    // 🧾 Restrict mixing sellers
+    // Restrict mixing sellers
     if (cart.items.length > 0) {
       const firstCartItem = cart.items[0];
       const existingProduct = await Product.findById(firstCartItem.productId);
@@ -130,12 +154,18 @@ exports.addCart = async (req, res) => {
       }
     }
 
-    // ✅ Add or update item in cart
-    const existingItem = cart.items.find(item => item.productId.toString() === productId);
+    // Match by productId AND selectedVariation (different variation = different line)
+    const existingItem = cart.items.find(item => {
+      if (item.productId.toString() !== productId) return false;
+      const existingVar = (item.selectedVariation || []).map(v => `${v.name}:${v.value}`).sort().join(',');
+      const newVar = variationArr.map(v => `${v.name}:${v.value}`).sort().join(',');
+      return existingVar === newVar;
+    });
+
     if (existingItem) {
       existingItem.quantity += quantity;
     } else {
-      cart.items.push({ productId, quantity });
+      cart.items.push({ productId, quantity, selectedVariation: variationArr });
     }
 
     await cart.save();

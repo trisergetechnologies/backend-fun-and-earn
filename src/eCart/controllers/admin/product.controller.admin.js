@@ -13,6 +13,9 @@ exports.addProduct = async (req, res) => {
     const discountPercent = req.body.discountPercent
       ? parseFloat(req.body.discountPercent)
       : 0;
+    const gst = req.body.gst !== undefined && req.body.gst !== ''
+      ? parseFloat(req.body.gst)
+      : 0.05;
 
     // ✅ Basic validation
     if (!title || isNaN(price) || isNaN(stock) || !categoryId || !sellerId) {
@@ -46,6 +49,18 @@ exports.addProduct = async (req, res) => {
     const finalPrice = +(price - (price * discountPercent) / 100).toFixed(2);
 
     // ✅ Create product
+    // Parse variations if provided (comes as JSON string from FormData)
+    let variations = [];
+    if (req.body.variations) {
+      try {
+        variations = typeof req.body.variations === 'string'
+          ? JSON.parse(req.body.variations)
+          : req.body.variations;
+      } catch (e) {
+        variations = [];
+      }
+    }
+
     const newProduct = new Product({
       sellerId: sellerId,
       categoryId,
@@ -55,6 +70,8 @@ exports.addProduct = async (req, res) => {
       stock,
       discountPercent,
       finalPrice,
+      gst,
+      variations,
       createdByRole: user.role,
       images: req.file ? [req.file.url] : []
     });
@@ -149,11 +166,25 @@ exports.updateProduct = async (req, res) => {
     const admin = req.user;
     const { id } = req.params;
 
-
-
-    // Prevent updating images through this endpoint
+    // Remove images from body — images are handled via file upload
     if (req.body.images) {
       delete req.body.images;
+    }
+
+    // Parse gst if provided as string
+    if (req.body.gst !== undefined && req.body.gst !== '') {
+      req.body.gst = parseFloat(req.body.gst);
+    }
+
+    // Parse variations if provided as JSON string
+    if (req.body.variations) {
+      try {
+        req.body.variations = typeof req.body.variations === 'string'
+          ? JSON.parse(req.body.variations)
+          : req.body.variations;
+      } catch (e) {
+        delete req.body.variations;
+      }
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(
@@ -162,8 +193,7 @@ exports.updateProduct = async (req, res) => {
       { new: true, runValidators: true }
     )
       .populate('sellerId', 'name email')
-      .populate('categoryId', 'title slug')
-      .select('-images');
+      .populate('categoryId', 'title slug');
 
     if (!updatedProduct) {
       return res.status(200).json({
@@ -173,9 +203,15 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
+    // Handle new image upload
+    if (req.file) {
+      updatedProduct.images = [req.file.url];
+      await updatedProduct.save();
+    }
+
     // Recalculate finalPrice if price or discount changed
     if (req.body.price || req.body.discountPercent) {
-      updatedProduct.finalPrice = updatedProduct.price * (1 - updatedProduct.discountPercent / 100);
+      updatedProduct.finalPrice = +(updatedProduct.price * (1 - updatedProduct.discountPercent / 100)).toFixed(2);
       await updatedProduct.save();
     }
 

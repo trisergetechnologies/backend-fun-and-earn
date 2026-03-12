@@ -8,7 +8,7 @@ adminProductRouter.post('/addproduct', singleImageUpload('image'), addProduct);
 adminProductRouter.get('/getproducts', getProducts);
 adminProductRouter.get('/getproducts/:id', getProducts);
 
-adminProductRouter.put('/updateproduct/:id', updateProduct);
+adminProductRouter.put('/updateproduct/:id', singleImageUpload('image'), updateProduct);
 
 adminProductRouter.delete('/deleteproduct/:id', deleteProduct);
 

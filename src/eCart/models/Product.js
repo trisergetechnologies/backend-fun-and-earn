@@ -77,7 +77,12 @@ const ProductSchema = new mongoose.Schema({
     type: String,
     enum: ['admin', 'seller'],
     required: true
-  }
+  },
+
+  variations: [{
+    name: { type: String },
+    options: [{ type: String }]
+  }]
 
 }, { timestamps: true });
 

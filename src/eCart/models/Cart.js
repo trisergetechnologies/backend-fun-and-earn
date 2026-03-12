@@ -11,7 +11,11 @@ const CartItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1
-  }
+  },
+  selectedVariation: [{
+    name: { type: String },
+    value: { type: String }
+  }]
 }, { _id: false });
 
 const CartSchema = new mongoose.Schema({
