@@ -15,6 +15,10 @@ const PackageSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  levelUpto: {
+    type: Number,
+    required: true
+  },
   description: {
     type: String,
     default: ''
