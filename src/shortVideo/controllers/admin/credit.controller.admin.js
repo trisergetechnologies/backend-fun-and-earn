@@ -32,15 +32,36 @@ exports.getUsersWithWatchTime = async (req, res) => {
       });
     }
 
-    // Otherwise → fetch all eligible users
-    const users = await User.find({
-      'shortVideoProfile.watchTime': { $gte: WATCH_TIME_THRESHOLD }
-    }).select('name email phone shortVideoProfile.watchTime');
+    // Fetch with pagination, search, sort
+    const { page = 1, limit = 10, search, sortBy = 'watchtimeDesc' } = req.query;
+    const filter = { 'shortVideoProfile.watchTime': { $gte: WATCH_TIME_THRESHOLD } };
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      filter.$or = [
+        { name: { $regex: term, $options: 'i' } },
+        { email: { $regex: term, $options: 'i' } },
+        { phone: { $regex: term, $options: 'i' } }
+      ];
+    }
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+    let sortOpt = { 'shortVideoProfile.watchTime': -1 };
+    if (sortBy === 'watchtimeAsc') sortOpt = { 'shortVideoProfile.watchTime': 1 };
+    else if (sortBy === 'name') sortOpt = { name: 1 };
+
+    const [users, total] = await Promise.all([
+      User.find(filter).select('name email phone shortVideoProfile.watchTime image').sort(sortOpt).skip(skip).limit(limitNum).lean(),
+      User.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(total / limitNum) || 1;
 
     return res.status(200).json({
       success: true,
       message: 'Users with watch time >= 10 hours fetched successfully',
-      data: users
+      data: users,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages }
     });
 
   } catch (err) {

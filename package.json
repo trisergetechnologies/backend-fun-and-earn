@@ -4,12 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --no-cache --forceExit",
     "start": "node ./src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
   "dependencies": {
     "@sendgrid/mail": "^8.1.5",
     "axios": "^1.12.2",

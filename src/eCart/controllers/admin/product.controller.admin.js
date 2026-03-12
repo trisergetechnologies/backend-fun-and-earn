@@ -101,7 +101,6 @@ exports.getProducts = async (req, res) => {
     const admin = req.user;
     const { id } = req.params;
     const { page = 1, limit = 25 } = req.query;
-    const skip = (page - 1) * limit;
 
     // If ID is provided → return single product with full details
     if (id) {
@@ -128,22 +127,45 @@ exports.getProducts = async (req, res) => {
       });
     }
 
-    // If no ID → return all products (active and inactive)
-    const allProducts = await Product.find()
-      .skip(skip)
-      .limit(parseInt(limit))
-      .populate('sellerId', 'name email role')
-      .populate('categoryId', 'title slug');
+    // Backend-driven filters: search, categoryId, isActive
+    const queryFilter = {};
+    if (req.query.search && typeof req.query.search === 'string' && req.query.search.trim()) {
+      const term = req.query.search.trim();
+      queryFilter.$or = [
+        { title: { $regex: term, $options: 'i' } },
+        { description: { $regex: term, $options: 'i' } }
+      ];
+    }
+    if (req.query.categoryId && req.query.categoryId.trim()) {
+      queryFilter.categoryId = req.query.categoryId.trim();
+    }
+    if (req.query.isActive !== undefined && req.query.isActive !== '') {
+      queryFilter.isActive = req.query.isActive === 'true';
+    }
 
-    const totalProducts = await Product.countDocuments();
-    const totalPages = Math.ceil(totalProducts / limit);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const skipNum = (Math.max(1, parseInt(page, 10)) - 1) * limitNum;
+
+    const [allProducts, totalProducts] = await Promise.all([
+      Product.find(queryFilter)
+        .skip(skipNum)
+        .limit(limitNum)
+        .populate('sellerId', 'name email role')
+        .populate('categoryId', 'title slug')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Product.countDocuments(queryFilter)
+    ]);
+
+    const totalPages = Math.ceil(totalProducts / limitNum) || 1;
 
     return res.status(200).json({
       success: true,
       message: 'All products fetched successfully',
       data: {
         products: allProducts,
-        totalPages
+        totalPages,
+        total: totalProducts
       }
     });
 

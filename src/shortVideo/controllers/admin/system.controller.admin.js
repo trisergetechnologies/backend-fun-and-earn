@@ -19,14 +19,25 @@ const { captureLeftovers } = require('../../helpers/captureLeftovers');
 
 exports.getSystemEarningLogs = async (req, res) => {
   try {
-    const { limit = 20, page = 1 } = req.query;
+    const { limit = 20, page = 1, search } = req.query;
+    const filter = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      filter.$or = [
+        { source: { $regex: term, $options: 'i' } },
+        { context: { $regex: term, $options: 'i' } },
+        { status: { $regex: term, $options: 'i' } }
+      ];
+    }
 
-    const logs = await SystemEarningLog.find({})
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const pageNum = Math.max(1, Number(page));
+    const skip = (pageNum - 1) * limitNum;
 
-    const total = await SystemEarningLog.countDocuments();
+    const [logs, total] = await Promise.all([
+      SystemEarningLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+      SystemEarningLog.countDocuments(filter)
+    ]);
 
     if (!logs || logs.length === 0) {
       return res.status(200).json({
@@ -43,9 +54,9 @@ exports.getSystemEarningLogs = async (req, res) => {
         logs,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / limit)
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum) || 1
         }
       }
     });

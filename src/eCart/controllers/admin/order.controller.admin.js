@@ -48,23 +48,50 @@ exports.getOrders = async (req, res) => {
     if (status) {
       filter.status = status;
     }
+    if (req.query.paymentStatus) {
+      filter.paymentStatus = req.query.paymentStatus;
+    }
     if (buyerId) {
       filter.buyerId = buyerId;
     }
     if (sellerId) {
       filter['items.sellerId'] = sellerId;
     }
+    // Search by order ID (only when valid ObjectId)
+    if (req.query.search && typeof req.query.search === 'string' && req.query.search.trim()) {
+      const id = req.query.search.trim();
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        filter._id = id;
+      }
+    }
 
-    // Get all orders with filters
-    const orders = await Order.find(filter)
-      .populate('buyerId', 'name email')
-      .populate('items.productId', 'title')
-      .sort({ createdAt: -1 });
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+    const sortBy = req.query.sortBy || 'newest';
+    let sortOpt = { createdAt: -1 };
+    if (sortBy === 'oldest') sortOpt = { createdAt: 1 };
+    else if (sortBy === 'amountHigh') sortOpt = { finalAmountPaid: -1 };
+    else if (sortBy === 'amountLow') sortOpt = { finalAmountPaid: 1 };
+
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .populate('buyerId', 'name email')
+        .populate('items.productId', 'title')
+        .sort(sortOpt)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Order.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return res.status(200).json({
       success: true,
       message: status ? `Orders filtered by status: ${status}` : 'All orders fetched',
-      data: orders
+      data: orders,
+      pagination: { page, limit, total, totalPages }
     });
 
   } catch (err) {

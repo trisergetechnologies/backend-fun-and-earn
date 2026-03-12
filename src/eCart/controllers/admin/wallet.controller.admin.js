@@ -126,10 +126,9 @@ exports.getWithdrawalRequests = async (req, res) => {
       });
     }
 
-    const { status } = req.query; // optional filter
+    const { status, page = 1, limit = 10, search, minAmount, maxAmount, dateFrom, dateTo } = req.query;
     const validStatuses = ["pending", "approved", "rejected"];
 
-    // Validate status if provided
     const filter = {};
     if (status) {
       if (!validStatuses.includes(status)) {
@@ -141,21 +140,57 @@ exports.getWithdrawalRequests = async (req, res) => {
       }
       filter.status = status;
     }
+    if (minAmount != null && minAmount !== '') {
+      filter.amount = filter.amount || {};
+      filter.amount.$gte = Number(minAmount);
+    }
+    if (maxAmount != null && maxAmount !== '') {
+      filter.amount = filter.amount || {};
+      filter.amount.$lte = Number(maxAmount);
+    }
+    if (dateFrom && dateFrom.trim()) {
+      filter.createdAt = filter.createdAt || {};
+      filter.createdAt.$gte = new Date(dateFrom);
+    }
+    if (dateTo && dateTo.trim()) {
+      filter.createdAt = filter.createdAt || {};
+      filter.createdAt.$lte = new Date(dateTo);
+    }
 
-    // Fetch withdrawal requests (latest first)
-    const requests = await WithdrawalRequest.find(filter)
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      const userIds = await User.find({
+        $or: [
+          { name: { $regex: term, $options: 'i' } },
+          { email: { $regex: term, $options: 'i' } },
+          { phone: { $regex: term, $options: 'i' } }
+        ]
+      }).distinct('_id');
+      filter.user = { $in: userIds };
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = WithdrawalRequest.find(filter)
       .populate({
         path: "user",
         select: "name email phone wallets.eCartWallet wallets.shortVideoWallet eCartProfile.bankDetails",
       })
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 });
+
+    const [requests, total] = await Promise.all([
+      query.clone().skip(skip).limit(limitNum).lean(),
+      query.countDocuments()
+    ]);
 
     if (!requests || requests.length === 0) {
       return res.status(200).json({
         success: true,
         message: "No withdrawal requests found",
         data: [],
+        pagination: { page: pageNum, limit: limitNum, total: total || 0, totalPages: Math.ceil((total || 0) / limitNum) || 1 },
       });
     }
 
@@ -186,6 +221,7 @@ exports.getWithdrawalRequests = async (req, res) => {
       success: true,
       message: "Withdrawal requests fetched successfully",
       data: formatted,
+      pagination: { page: pageNum, limit: limitNum, total: total || 0, totalPages: Math.ceil((total || 0) / limitNum) || 1 },
     });
   } catch (err) {
     console.error("❌ Error in getWithdrawalRequests:", err);

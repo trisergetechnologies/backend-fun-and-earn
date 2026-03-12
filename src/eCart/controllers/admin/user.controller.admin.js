@@ -66,18 +66,42 @@ exports.getUsers = async (req, res) => {
       }
     }
 
-    // Get all users (with optional filter)
-    const users = await User.find(filter, { password: 0, token: 0 })
-      .populate('shortVideoProfile.videoUploads')
-      .populate('eCartProfile.orders')
-      .populate('package')
-      .populate('wallets.rewardWallet')
-      .sort({ createdAt: -1 });
+    // Backend-driven search (name, email, phone, referralCode, package name)
+    const { search, page = 1, limit = 10, sortField = 'createdAt', sortOrder = 'desc' } = req.query;
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      filter.$or = [
+        { name: { $regex: term, $options: 'i' } },
+        { email: { $regex: term, $options: 'i' } },
+        { phone: { $regex: term, $options: 'i' } },
+        { referralCode: { $regex: term, $options: 'i' } }
+      ];
+    }
+
+    const skip = (Math.max(1, parseInt(page, 10)) - 1) * Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const sortOpt = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
+
+    const [users, total] = await Promise.all([
+      User.find(filter, { password: 0, token: 0 })
+        .populate('shortVideoProfile.videoUploads')
+        .populate('eCartProfile.orders')
+        .populate('package')
+        .populate('wallets.rewardWallet')
+        .sort(sortOpt)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(total / limitNum) || 1;
 
     return res.status(200).json({
       success: true,
       message: appFilter ? `Users filtered by ${appFilter}` : 'All users fetched',
-      data: users
+      data: users,
+      pagination: { page: parseInt(page, 10), limit: limitNum, total, totalPages }
     });
 
   } catch (err) {
