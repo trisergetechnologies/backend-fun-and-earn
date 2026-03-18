@@ -2,16 +2,16 @@ const Achievement = require("../../models/Achievement");
 const User = require("../../models/User");
 
 const ACHIEVEMENTS = {
-  1: { title: "Star Achiever", threshold: 5 },
-  2: { title: "Star Winner", threshold: 25 },
-  3: { title: "Team Leader", threshold: 109 },
-  4: { title: "Senior Team Leader", threshold: 409 },
-  5: { title: "Team Manager", threshold: 1509 },
-  6: { title: "Senior Team Manager", threshold: 5009 },
-  7: { title: "Team Executive Officer", threshold: 20009 },
-  8: { title: "Senior Team Executive Officer", threshold: 75009 },
-  9: { title: "State Executive Director", threshold: 250009 },
-  10: { title: "National Executive Director", threshold: 9999999 }
+  1: { title: "Emerging Leader Bonus", threshold: 5 },
+  2: { title: "Team Builder Bonus", threshold: 25 },
+  3: { title: "Team Performance Bonus", threshold: 109 },
+  4: { title: "Business Activity Bonus", threshold: 409 },
+  5: { title: "Team Growth Bonus", threshold: 1509 },
+  6: { title: "Bike Fund", threshold: 5009 },
+  7: { title: "Holiday Travel Fund", threshold: 20009 },
+  8: { title: "Dream Car Fund", threshold: 75009 },
+  9: { title: "Dream House Fund", threshold: 245999 },
+  10: { title: "Family Security Royalty", threshold: 999999 }
 };
 
 /**

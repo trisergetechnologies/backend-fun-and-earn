@@ -173,15 +173,16 @@ exports.getPackages = async (req, res) => {
 
 
 const ACHIEVEMENTS = [
-  { position: "Star Achiever", threshold: 5 },
-  { position: "Star Winner", threshold: 25 },
-  { position: "Team Leader", threshold: 109 },
-  { position: "Senior Team", threshold: 409 },
-  { position: "Team Manager", threshold: 1509 },
-  { position: "Senior Team Manager", threshold: 5009 },
-  { position: "Team Executive Officer", threshold: 20009 },
-  { position: "State Executive Director", threshold: 75009 },
-  { position: "National Executive Director", threshold: 9999999 },
+  { position: "Emerging Leader Bonus", threshold: 5 },
+  { position: "Team Builder Bonus", threshold: 25 },
+  { position: "Team Performance Bonus", threshold: 109 },
+  { position: "Business Activity Bonus", threshold: 409 },
+  { position: "Team Growth Bonus", threshold: 1509 },
+  { position: "Bike Fund", threshold: 5009 },
+  { position: "Holiday Travel Fund", threshold: 20009 },
+  { position: "Dream Car Fund", threshold: 75009 },
+  { position: "Dream House Fund", threshold: 245999 },
+  { position: "Family Security Royalty", threshold: 999999 },
 ];
 
 /**
@@ -293,16 +294,16 @@ exports.getMyAchievement = async (req, res) => {
 
 
 const MONTHLY_ACHIEVEMENTS = {
-  1: { title: "Ruby Star", threshold: 10 },
-  2: { title: "Pearl Star", threshold: 50 },
-  3: { title: "Bronze Star", threshold: 250 },
-  4: { title: "Silver Star", threshold: 750 },
-  5: { title: "Gold Star", threshold: 2500 },
-  6: { title: "Platinum Star", threshold: 12500 },
-  7: { title: "Diamond Star", threshold: 49999 },
-  8: { title: "Master's Star", threshold: 109999 },
-  9: { title: "Grand Master's Star", threshold: 499999 },
-  10: { title: "F&E Legend", threshold: 2399999 },
+  1: { title: "Business Associate", threshold: 10 },
+  2: { title: "Development Associate", threshold: 50 },
+  3: { title: "Assistant Manager", threshold: 256 },
+  4: { title: "Manager", threshold: 786 },
+  5: { title: "Senior Manager", threshold: 2566 },
+  6: { title: "General Manager", threshold: 12506 },
+  7: { title: "Regional Manager", threshold: 50006 },
+  8: { title: "Zonal Head", threshold: 156009 },
+  9: { title: "State Head", threshold: 600009 },
+  10: { title: "Board Member", threshold: 2499999 },
 };
 
 
