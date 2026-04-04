@@ -33,13 +33,6 @@ function formatIstDisplay(d) {
   });
 }
 
-function itemsSummaryForCsv(items) {
-  if (!items || !items.length) return '';
-  return items
-    .map((i) => `${(i.productTitle || '').replace(/;/g, ',')} x${i.quantity || 0}`)
-    .join('; ');
-}
-
 /** Short period slug + wall-clock stamp; strip only characters illegal in Windows filenames. */
 function buildOrderReportFilename(periodPart) {
   const d = new Date();
@@ -47,18 +40,6 @@ function buildOrderReportFilename(periodPart) {
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   const safe = String(periodPart).replace(/[<>:"/\\|?*\x00-\x1f]/g, '');
   return `order-report-${safe}_${stamp}.xlsx`;
-}
-
-function lastTrackingSummary(trackingUpdates) {
-  if (!Array.isArray(trackingUpdates) || !trackingUpdates.length) return '';
-  const last = trackingUpdates[trackingUpdates.length - 1];
-  const status = last.status || '';
-  const note = (last.note && String(last.note).trim()) || '';
-  const when = last.updatedAt ? formatIstDisplay(last.updatedAt) : '';
-  let s = status;
-  if (note) s += (s ? ' — ' : '') + note;
-  if (when) s += (s ? ' • ' : '') + when;
-  return s;
 }
 
 // 1. Get Orders
@@ -375,46 +356,24 @@ exports.exportOrdersExcel = async (req, res) => {
     const orders = await Order.find({
       createdAt: { $gte: startUtc, $lt: endUtc },
       paymentStatus: 'paid',
+      'paymentInfo.gateway': 'razorpay',
     })
-      .populate('buyerId', 'name email phone')
+      .populate('buyerId', 'name')
       .sort({ createdAt: 1 })
       .limit(50000)
       .lean();
 
     const headerLabels = [
-      'Public order ID',
-      'Order ID',
-      'Buyer name',
-      'Email',
-      'Phone',
-      'Payment status',
-      'Delivery status',
-      'Refund status',
-      'Cancel requested',
-      'Return requested',
-      'Return status',
-      'Payment gateway',
-      'Payment / txn ID',
-      'Final amount paid (₹)',
-      'Total amount (₹)',
+      'Order Id',
+      'Buyer Name',
+      'Final Amount Paid (₹)',
+      'Total Amount (₹)',
       'GST (₹)',
-      'Wallet used (₹)',
-      'Delivery charge (₹)',
-      'Items',
-      'Ship to name',
-      'Ship phone',
-      'Address line',
-      'City',
       'State',
-      'PIN',
-      'Latest tracking update',
-      'Placed at',
+      'Placed At',
     ];
 
-    const colWidths = [
-      22, 26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 40, 18, 14, 28, 14, 12, 8,
-      36, 22,
-    ];
+    const colWidths = [24, 28, 20, 18, 14, 22, 24];
 
     const colCount = headerLabels.length;
     const thin = { style: 'thin', color: { argb: 'FF312E81' } };
@@ -431,7 +390,7 @@ exports.exportOrdersExcel = async (req, res) => {
 
     sheet.mergeCells(1, 1, 1, colCount);
     const titleCell = sheet.getCell(1, 1);
-    titleCell.value = `Order report — ${label} — ${orders.length} paid order${orders.length === 1 ? '' : 's'}`;
+    titleCell.value = `Order report (Razorpay) — ${label} — ${orders.length} paid order${orders.length === 1 ? '' : 's'}`;
     titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
     titleCell.fill = {
       type: 'pattern',
@@ -471,51 +430,24 @@ exports.exportOrdersExcel = async (req, res) => {
     let sumFinal = 0;
     let sumTotal = 0;
     let sumGst = 0;
-    let sumWallet = 0;
-    let sumDelivery = 0;
     for (const o of orders) {
       const buyer = o.buyerId && typeof o.buyerId === 'object' ? o.buyerId : null;
       const addr = o.deliveryAddress || {};
-      const pay = o.paymentInfo || {};
 
       const finalAmt = Number(o.finalAmountPaid) || 0;
       const totalAmt = Number(o.totalAmount) || 0;
       const gstAmt = Number(o.totalGstAmount) || 0;
-      const walletAmt = Number(o.usedWalletAmount) || 0;
-      const deliveryAmt = Number(o.deliveryCharge) || 0;
       sumFinal += finalAmt;
       sumTotal += totalAmt;
       sumGst += gstAmt;
-      sumWallet += walletAmt;
-      sumDelivery += deliveryAmt;
 
       const values = [
         o.publicOrderId || '',
-        String(o._id),
         buyer?.name || '',
-        buyer?.email || '',
-        buyer?.phone || '',
-        o.paymentStatus || 'paid',
-        o.status || '',
-        o.refundStatus || '',
-        o.cancelRequested ? 'Yes' : 'No',
-        o.returnRequested ? 'Yes' : 'No',
-        o.returnStatus || '',
-        pay.gateway || '',
-        pay.paymentId || '',
         finalAmt,
         totalAmt,
         gstAmt,
-        walletAmt,
-        deliveryAmt,
-        itemsSummaryForCsv(o.items),
-        addr.fullName || '',
-        addr.phone || '',
-        addr.street || '',
-        addr.city || '',
         addr.state || '',
-        addr.pincode || '',
-        lastTrackingSummary(o.trackingUpdates),
         formatIstDisplay(o.createdAt),
       ];
 
@@ -528,7 +460,7 @@ exports.exportOrdersExcel = async (req, res) => {
           bottom: thinGray,
           right: thinGray,
         };
-        if (colNumber === 1 || colNumber === 2) {
+        if (colNumber === 1) {
           cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF374151' } };
         } else {
           cell.font = { name: 'Calibri', size: 10 };
@@ -540,7 +472,7 @@ exports.exportOrdersExcel = async (req, res) => {
             fgColor: { argb: 'FFF8FAFC' },
           };
         }
-        if (colNumber >= 14 && colNumber <= 18) {
+        if (colNumber >= 3 && colNumber <= 5) {
           cell.numFmt = moneyNumFmt;
         }
       });
@@ -550,7 +482,7 @@ exports.exportOrdersExcel = async (req, res) => {
     if (orders.length > 0) {
       const totalRow = sheet.addRow([]);
       totalRow.height = 22;
-      const labelCell = totalRow.getCell(13);
+      const labelCell = totalRow.getCell(2);
       labelCell.value = 'Totals';
       labelCell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
       labelCell.alignment = { horizontal: 'right' };
@@ -559,9 +491,9 @@ exports.exportOrdersExcel = async (req, res) => {
         pattern: 'solid',
         fgColor: { argb: 'FFEEF2FF' },
       };
-      const totals = [sumFinal, sumTotal, sumGst, sumWallet, sumDelivery];
-      for (let i = 0; i < 5; i += 1) {
-        const c = 14 + i;
+      const totals = [sumFinal, sumTotal, sumGst];
+      for (let i = 0; i < 3; i += 1) {
+        const c = 3 + i;
         const cell = totalRow.getCell(c);
         cell.value = Math.round((totals[i] + Number.EPSILON) * 100) / 100;
         cell.numFmt = moneyNumFmt;
