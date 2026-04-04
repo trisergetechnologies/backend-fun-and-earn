@@ -382,6 +382,7 @@ exports.exportOrdersExcel = async (req, res) => {
       .lean();
 
     const headerLabels = [
+      'Public order ID',
       'Order ID',
       'Buyer name',
       'Email',
@@ -396,6 +397,7 @@ exports.exportOrdersExcel = async (req, res) => {
       'Payment / txn ID',
       'Final amount paid (₹)',
       'Total amount (₹)',
+      'GST (₹)',
       'Wallet used (₹)',
       'Delivery charge (₹)',
       'Coupon',
@@ -407,15 +409,12 @@ exports.exportOrdersExcel = async (req, res) => {
       'State',
       'PIN',
       'Latest tracking update',
-      'Placed at (UTC)',
-      'Placed at (India)',
-      'Updated at (UTC)',
-      'Updated at (India)',
+      'Placed at',
     ];
 
     const colWidths = [
-      26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 40, 18, 14, 28, 14, 12, 8, 36,
-      22, 22, 22, 22,
+      22, 26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 12, 40, 18, 14, 28, 14, 12,
+      8, 36, 22,
     ];
 
     const colCount = headerLabels.length;
@@ -472,6 +471,7 @@ exports.exportOrdersExcel = async (req, res) => {
     let rowNum = 3;
     let sumFinal = 0;
     let sumTotal = 0;
+    let sumGst = 0;
     let sumWallet = 0;
     let sumDelivery = 0;
     for (const o of orders) {
@@ -481,14 +481,17 @@ exports.exportOrdersExcel = async (req, res) => {
 
       const finalAmt = Number(o.finalAmountPaid) || 0;
       const totalAmt = Number(o.totalAmount) || 0;
+      const gstAmt = Number(o.totalGstAmount) || 0;
       const walletAmt = Number(o.usedWalletAmount) || 0;
       const deliveryAmt = Number(o.deliveryCharge) || 0;
       sumFinal += finalAmt;
       sumTotal += totalAmt;
+      sumGst += gstAmt;
       sumWallet += walletAmt;
       sumDelivery += deliveryAmt;
 
       const values = [
+        o.publicOrderId || '',
         String(o._id),
         buyer?.name || '',
         buyer?.email || '',
@@ -503,6 +506,7 @@ exports.exportOrdersExcel = async (req, res) => {
         pay.paymentId || '',
         finalAmt,
         totalAmt,
+        gstAmt,
         walletAmt,
         deliveryAmt,
         o.usedCouponCode || '',
@@ -514,10 +518,7 @@ exports.exportOrdersExcel = async (req, res) => {
         addr.state || '',
         addr.pincode || '',
         lastTrackingSummary(o.trackingUpdates),
-        formatUtcIso(o.createdAt),
         formatIstDisplay(o.createdAt),
-        formatUtcIso(o.updatedAt),
-        formatIstDisplay(o.updatedAt),
       ];
 
       const row = sheet.addRow(values);
@@ -529,7 +530,7 @@ exports.exportOrdersExcel = async (req, res) => {
           bottom: thinGray,
           right: thinGray,
         };
-        if (colNumber === 1) {
+        if (colNumber === 1 || colNumber === 2) {
           cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF374151' } };
         } else {
           cell.font = { name: 'Calibri', size: 10 };
@@ -541,7 +542,7 @@ exports.exportOrdersExcel = async (req, res) => {
             fgColor: { argb: 'FFF8FAFC' },
           };
         }
-        if (colNumber >= 13 && colNumber <= 16) {
+        if (colNumber >= 15 && colNumber <= 19) {
           cell.numFmt = moneyNumFmt;
         }
       });
@@ -551,7 +552,7 @@ exports.exportOrdersExcel = async (req, res) => {
     if (orders.length > 0) {
       const totalRow = sheet.addRow([]);
       totalRow.height = 22;
-      const labelCell = totalRow.getCell(11);
+      const labelCell = totalRow.getCell(14);
       labelCell.value = 'Totals';
       labelCell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
       labelCell.alignment = { horizontal: 'right' };
@@ -560,9 +561,9 @@ exports.exportOrdersExcel = async (req, res) => {
         pattern: 'solid',
         fgColor: { argb: 'FFEEF2FF' },
       };
-      const totals = [sumFinal, sumTotal, sumWallet, sumDelivery];
-      for (let i = 0; i < 4; i += 1) {
-        const c = 13 + i;
+      const totals = [sumFinal, sumTotal, sumGst, sumWallet, sumDelivery];
+      for (let i = 0; i < 5; i += 1) {
+        const c = 15 + i;
         const cell = totalRow.getCell(c);
         cell.value = Math.round((totals[i] + Number.EPSILON) * 100) / 100;
         cell.numFmt = moneyNumFmt;

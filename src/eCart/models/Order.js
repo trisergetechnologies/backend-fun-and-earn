@@ -1,4 +1,14 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+
+function generatePublicOrderId() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const rand = crypto.randomBytes(5).toString('hex').toUpperCase();
+  return `ORD-${y}${m}${day}-${rand}`;
+}
 
 const AddressSnapshotSchema = new mongoose.Schema({
   addressName: String,
@@ -57,6 +67,15 @@ const OrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+
+  /** Human-facing stable id (e.g. ORD-20260404-AB12CD34EF); set on first save for new orders. */
+  publicOrderId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    index: true,
   },
 
   items: [OrderItemSchema],
@@ -162,11 +181,27 @@ const OrderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-OrderSchema.pre('save', function (next) {
+OrderSchema.pre('save', async function assignPublicOrderIdAndDefaults() {
   if (this.isPackageCronProcessed === undefined || this.isPackageCronProcessed === null) {
     this.isPackageCronProcessed = false;
   }
-  next();
+  if (this.isNew && !this.publicOrderId) {
+    const Model = this.constructor;
+    const session = this.$session && this.$session();
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const candidate = generatePublicOrderId();
+      let q = Model.findOne({ publicOrderId: candidate }).select('_id').lean();
+      if (session) q = q.session(session);
+      const taken = await q;
+      if (!taken) {
+        this.publicOrderId = candidate;
+        break;
+      }
+    }
+    if (!this.publicOrderId) {
+      throw new Error('Could not assign publicOrderId');
+    }
+  }
 });
 
 module.exports = mongoose.model('Order', OrderSchema);

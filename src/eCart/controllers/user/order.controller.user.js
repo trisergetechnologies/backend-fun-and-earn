@@ -148,6 +148,7 @@ exports.placeOrder = async (req, res) => {
       message: 'Order placed successfully',
       data: {
         orderId: order._id,
+        publicOrderId: order.publicOrderId,
         totalAmount: subtotal,
         walletUsed: usedWalletAmount,
         paidAmount: finalAmountPaid,
@@ -223,6 +224,7 @@ exports.createOrderIntent = async (req, res) => {
             paymentIntentId: existing._id,
             razorpayOrderId: existing.razorpayOrderId,
             orderId: order?._id || null,
+            publicOrderId: order?.publicOrderId || null,
             amount: existing.amount,
             expiresAt: existing.expiresAt
           }
@@ -404,6 +406,7 @@ exports.createOrderIntent = async (req, res) => {
           message: 'Order intent created. Complete payment via Razorpay.',
           data: {
             orderId: orderDoc._id,
+            publicOrderId: orderDoc.publicOrderId,
             paymentIntentId: paymentIntentDoc._id,
             razorpayOrderId: razorpayOrder.id,
             razorpayKeyId: RAZORPAY_KEY_ID,
@@ -482,6 +485,7 @@ exports.createOrderIntent = async (req, res) => {
         message: 'Order placed successfully using wallet only',
         data: {
           orderId: orderDoc._id,
+          publicOrderId: orderDoc.publicOrderId,
           paymentIntentId: paymentIntentDoc._id,
           totalAmount: subtotal,
           walletUsed: usedWalletAmount,
@@ -630,6 +634,7 @@ exports.placeOrderWalletOnly = async (req, res) => {
       message: 'Order placed successfully using wallet only',
       data: {
         orderId: order._id,
+        publicOrderId: order.publicOrderId,
         totalAmount: subtotal,
         paidAmount: 0,
         totalGstAmount: cart.totalGstAmount,
@@ -761,6 +766,7 @@ exports.cancelOrder = async (req, res) => {
       message: 'Order cancelled successfully',
       data: {
         orderId: order._id,
+        publicOrderId: order.publicOrderId,
         refundToWallet: order.usedWalletAmount,
         refundToBank
       }
@@ -1376,6 +1382,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
           data: {
             paymentIntentId: existing._id,
             orderId: order?._id || null,
+            publicOrderId: order?.publicOrderId || null,
             merchantTxnNo: existing.merchantTxnNo,
             amount: existing.amount,
             currency: existing.currency,
@@ -1585,6 +1592,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
         message: 'Orange PG order intent created',
         data: {
           orderId: orderDoc._id,
+          publicOrderId: orderDoc.publicOrderId,
           paymentIntentId: paymentIntentDoc._id,
           merchantTxnNo,
           amount: remaining,
@@ -1600,6 +1608,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
         message: 'Order placed successfully using wallet only',
         data: {
           orderId: orderDoc._id,
+          publicOrderId: orderDoc.publicOrderId,
           paymentIntentId: paymentIntentDoc._id,
           totalAmount: subtotal,
           walletUsed: usedWalletAmount,
