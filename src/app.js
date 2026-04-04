@@ -65,8 +65,12 @@ const createApp = () => {
   // Security headers
   app.use(helmet());
   
-  // Enable CORS (configure properly for production)
-  app.use(cors());
+  // Enable CORS — expose Content-Disposition so browsers allow reading download filenames (cross-origin).
+  app.use(
+    cors({
+      exposedHeaders: ['Content-Disposition'],
+    })
+  );
   
   // Parse JSON bodies
   app.use(express.json({limit: "50mb"}));

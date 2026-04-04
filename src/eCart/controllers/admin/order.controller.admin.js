@@ -40,12 +40,12 @@ function itemsSummaryForCsv(items) {
     .join('; ');
 }
 
-/** Short period slug + wall-clock stamp; safe for Content-Disposition filenames. */
+/** Short period slug + wall-clock stamp; strip only characters illegal in Windows filenames. */
 function buildOrderReportFilename(periodPart) {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  const safe = String(periodPart).replace(/[^0-9A-Za-z._-]/g, '');
+  const safe = String(periodPart).replace(/[<>:"/\\|?*\x00-\x1f]/g, '');
   return `order-report-${safe}_${stamp}.xlsx`;
 }
 
@@ -423,17 +423,6 @@ exports.exportOrdersExcel = async (req, res) => {
     const thinGray = { style: 'thin', color: { argb: 'FFE5E7EB' } };
     const headerBottom = { style: 'medium', color: { argb: 'FF312E81' } };
 
-    function colLetter(index1Based) {
-      let n = index1Based;
-      let s = '';
-      while (n > 0) {
-        const m = (n - 1) % 26;
-        s = String.fromCharCode(65 + m) + s;
-        n = Math.floor((n - 1) / 26);
-      }
-      return s;
-    }
-
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Fun-Earn Admin';
     workbook.created = new Date();
@@ -481,10 +470,23 @@ exports.exportOrdersExcel = async (req, res) => {
 
     const moneyNumFmt = '#,##0.00';
     let rowNum = 3;
+    let sumFinal = 0;
+    let sumTotal = 0;
+    let sumWallet = 0;
+    let sumDelivery = 0;
     for (const o of orders) {
       const buyer = o.buyerId && typeof o.buyerId === 'object' ? o.buyerId : null;
       const addr = o.deliveryAddress || {};
       const pay = o.paymentInfo || {};
+
+      const finalAmt = Number(o.finalAmountPaid) || 0;
+      const totalAmt = Number(o.totalAmount) || 0;
+      const walletAmt = Number(o.usedWalletAmount) || 0;
+      const deliveryAmt = Number(o.deliveryCharge) || 0;
+      sumFinal += finalAmt;
+      sumTotal += totalAmt;
+      sumWallet += walletAmt;
+      sumDelivery += deliveryAmt;
 
       const values = [
         String(o._id),
@@ -499,10 +501,10 @@ exports.exportOrdersExcel = async (req, res) => {
         o.returnStatus || '',
         pay.gateway || '',
         pay.paymentId || '',
-        Number(o.finalAmountPaid) || 0,
-        Number(o.totalAmount) || 0,
-        Number(o.usedWalletAmount) || 0,
-        Number(o.deliveryCharge) || 0,
+        finalAmt,
+        totalAmt,
+        walletAmt,
+        deliveryAmt,
         o.usedCouponCode || '',
         itemsSummaryForCsv(o.items),
         addr.fullName || '',
@@ -547,8 +549,6 @@ exports.exportOrdersExcel = async (req, res) => {
     }
 
     if (orders.length > 0) {
-      const firstDataRow = 3;
-      const lastDataRow = 2 + orders.length;
       const totalRow = sheet.addRow([]);
       totalRow.height = 22;
       const labelCell = totalRow.getCell(11);
@@ -560,12 +560,11 @@ exports.exportOrdersExcel = async (req, res) => {
         pattern: 'solid',
         fgColor: { argb: 'FFEEF2FF' },
       };
-      for (let c = 13; c <= 16; c += 1) {
-        const letter = colLetter(c);
+      const totals = [sumFinal, sumTotal, sumWallet, sumDelivery];
+      for (let i = 0; i < 4; i += 1) {
+        const c = 13 + i;
         const cell = totalRow.getCell(c);
-        cell.value = {
-          formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`,
-        };
+        cell.value = Math.round((totals[i] + Number.EPSILON) * 100) / 100;
         cell.numFmt = moneyNumFmt;
         cell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
         cell.fill = {
@@ -584,13 +583,14 @@ exports.exportOrdersExcel = async (req, res) => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = buildOrderReportFilename(periodPart);
+    const filenameStar = encodeURIComponent(filename);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${filename}"`
+      `attachment; filename="${filename}"; filename*=UTF-8''${filenameStar}`
     );
     return res.status(200).send(Buffer.from(buffer));
   } catch (err) {
