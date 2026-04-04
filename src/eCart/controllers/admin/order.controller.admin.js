@@ -400,7 +400,6 @@ exports.exportOrdersExcel = async (req, res) => {
       'GST (₹)',
       'Wallet used (₹)',
       'Delivery charge (₹)',
-      'Coupon',
       'Items',
       'Ship to name',
       'Ship phone',
@@ -413,8 +412,8 @@ exports.exportOrdersExcel = async (req, res) => {
     ];
 
     const colWidths = [
-      22, 26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 12, 40, 18, 14, 28, 14, 12,
-      8, 36, 22,
+      22, 26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 40, 18, 14, 28, 14, 12, 8,
+      36, 22,
     ];
 
     const colCount = headerLabels.length;
@@ -509,7 +508,6 @@ exports.exportOrdersExcel = async (req, res) => {
         gstAmt,
         walletAmt,
         deliveryAmt,
-        o.usedCouponCode || '',
         itemsSummaryForCsv(o.items),
         addr.fullName || '',
         addr.phone || '',
@@ -542,7 +540,7 @@ exports.exportOrdersExcel = async (req, res) => {
             fgColor: { argb: 'FFF8FAFC' },
           };
         }
-        if (colNumber >= 15 && colNumber <= 19) {
+        if (colNumber >= 14 && colNumber <= 18) {
           cell.numFmt = moneyNumFmt;
         }
       });
@@ -552,7 +550,7 @@ exports.exportOrdersExcel = async (req, res) => {
     if (orders.length > 0) {
       const totalRow = sheet.addRow([]);
       totalRow.height = 22;
-      const labelCell = totalRow.getCell(14);
+      const labelCell = totalRow.getCell(13);
       labelCell.value = 'Totals';
       labelCell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
       labelCell.alignment = { horizontal: 'right' };
@@ -563,7 +561,7 @@ exports.exportOrdersExcel = async (req, res) => {
       };
       const totals = [sumFinal, sumTotal, sumGst, sumWallet, sumDelivery];
       for (let i = 0; i < 5; i += 1) {
-        const c = 15 + i;
+        const c = 14 + i;
         const cell = totalRow.getCell(c);
         cell.value = Math.round((totals[i] + Number.EPSILON) * 100) / 100;
         cell.numFmt = moneyNumFmt;
