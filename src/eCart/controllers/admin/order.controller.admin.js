@@ -40,6 +40,15 @@ function itemsSummaryForCsv(items) {
     .join('; ');
 }
 
+/** Short period slug + wall-clock stamp; safe for Content-Disposition filenames. */
+function buildOrderReportFilename(periodPart) {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  const safe = String(periodPart).replace(/[^0-9A-Za-z._-]/g, '');
+  return `order-report-${safe}_${stamp}.xlsx`;
+}
+
 function lastTrackingSummary(trackingUpdates) {
   if (!Array.isArray(trackingUpdates) || !trackingUpdates.length) return '';
   const last = trackingUpdates[trackingUpdates.length - 1];
@@ -340,6 +349,7 @@ exports.exportOrdersExcel = async (req, res) => {
     let startUtc;
     let endUtc;
     let label;
+    let periodPart;
     const { year, month, from, to } = req.query;
 
     if (year != null && month != null && String(year).trim() !== '' && String(month).trim() !== '') {
@@ -350,9 +360,11 @@ exports.exportOrdersExcel = async (req, res) => {
       }
       ({ startUtc, endUtc } = getIstMonthRange(y, m));
       label = `${y}-${String(m).padStart(2, '0')}`;
+      periodPart = label;
     } else if (from && to) {
       ({ startUtc, endUtc } = parseIstDateRange(from, to, 366));
-      label = `${from}_to_${to}`;
+      label = `${from} → ${to}`;
+      periodPart = `${String(from).replace(/-/g, '')}-${String(to).replace(/-/g, '')}`;
     } else {
       return res.status(400).json({
         success: false,
@@ -571,13 +583,14 @@ exports.exportOrdersExcel = async (req, res) => {
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
+    const filename = buildOrderReportFilename(periodPart);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="orders-paid-${label}.xlsx"`
+      `attachment; filename="${filename}"`
     );
     return res.status(200).send(Buffer.from(buffer));
   } catch (err) {
