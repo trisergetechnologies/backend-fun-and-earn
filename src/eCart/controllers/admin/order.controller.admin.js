@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const ExcelJS = require('exceljs');
 const Order = require('../../models/Order');
 const generateCouponForOrder = require('../../helpers/generateCoupon');
 const {
@@ -9,8 +10,6 @@ const {
   getIstLastNDaysRange,
   parseIstDateRange,
 } = require('../../../utils/istRange');
-
-const OPEN_PIPELINE_STATUSES = ['placed', 'processing', 'shipped'];
 
 function formatUtcIso(d) {
   if (!d) return '';
@@ -34,17 +33,23 @@ function formatIstDisplay(d) {
   });
 }
 
-function escapeCsvCell(val) {
-  const s = val == null ? '' : String(val);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
 function itemsSummaryForCsv(items) {
   if (!items || !items.length) return '';
   return items
     .map((i) => `${(i.productTitle || '').replace(/;/g, ',')} x${i.quantity || 0}`)
     .join('; ');
+}
+
+function lastTrackingSummary(trackingUpdates) {
+  if (!Array.isArray(trackingUpdates) || !trackingUpdates.length) return '';
+  const last = trackingUpdates[trackingUpdates.length - 1];
+  const status = last.status || '';
+  const note = (last.note && String(last.note).trim()) || '';
+  const when = last.updatedAt ? formatIstDisplay(last.updatedAt) : '';
+  let s = status;
+  if (note) s += (s ? ' — ' : '') + note;
+  if (when) s += (s ? ' • ' : '') + when;
+  return s;
 }
 
 // 1. Get Orders
@@ -254,13 +259,7 @@ exports.getOrderDashboard = async (req, res) => {
     const matchMonth = { createdAt: { $gte: monthStart, $lt: monthEnd } };
     const matchSeries = { createdAt: { $gte: last30.startUtc, $lt: last30.endUtc } };
 
-    const [
-      todayAgg,
-      monthAgg,
-      openPipelineAgg,
-      dailySeriesAgg,
-      statusThisMonthAgg,
-    ] = await Promise.all([
+    const [todayAgg, monthAgg, dailySeriesAgg] = await Promise.all([
       Order.aggregate([
         { $match: matchToday },
         {
@@ -282,11 +281,6 @@ exports.getOrderDashboard = async (req, res) => {
         },
       ]),
       Order.aggregate([
-        { $match: { status: { $in: OPEN_PIPELINE_STATUSES } } },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $sort: { _id: 1 } },
-      ]),
-      Order.aggregate([
         { $match: matchSeries },
         {
           $group: {
@@ -301,11 +295,6 @@ exports.getOrderDashboard = async (req, res) => {
             paidRevenue: paidRevenueSum,
           },
         },
-        { $sort: { _id: 1 } },
-      ]),
-      Order.aggregate([
-        { $match: matchMonth },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]),
     ]);
@@ -333,19 +322,7 @@ exports.getOrderDashboard = async (req, res) => {
           orderCount: m0.orderCount,
           paidRevenue: Math.round((m0.paidRevenue + Number.EPSILON) * 100) / 100,
         },
-        openPipeline: openPipelineAgg.map((r) => ({ status: r._id, count: r.count })),
         dailySeriesLast30,
-        statusThisMonth: statusThisMonthAgg.map((r) => ({
-          status: r._id,
-          count: r.count,
-        })),
-      },
-      meta: {
-        timezone: 'Asia/Kolkata',
-        metricField: 'createdAt',
-        revenueDefinition: 'sum(finalAmountPaid) where paymentStatus=paid',
-        openPipelineStatuses: OPEN_PIPELINE_STATUSES,
-        statusThisMonthLabel: 'Orders placed this month (IST) by fulfillment status',
       },
     });
   } catch (err) {
@@ -358,7 +335,7 @@ exports.getOrderDashboard = async (req, res) => {
   }
 };
 
-exports.exportOrdersCsv = async (req, res) => {
+exports.exportOrdersExcel = async (req, res) => {
   try {
     let startUtc;
     let endUtc;
@@ -379,55 +356,141 @@ exports.exportOrdersCsv = async (req, res) => {
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Provide year and month (IST), or from and to (YYYY-MM-DD, IST)',
+        message: 'Provide year and month, or from and to (YYYY-MM-DD)',
       });
     }
 
-    const orders = await Order.find({ createdAt: { $gte: startUtc, $lt: endUtc } })
+    const orders = await Order.find({
+      createdAt: { $gte: startUtc, $lt: endUtc },
+      paymentStatus: 'paid',
+    })
       .populate('buyerId', 'name email phone')
       .sort({ createdAt: 1 })
       .limit(50000)
       .lean();
 
-    const header = [
-      'orderId',
-      'buyerName',
-      'buyerEmail',
-      'buyerPhone',
-      'status',
-      'paymentStatus',
-      'finalAmountPaid',
-      'totalAmount',
-      'usedWalletAmount',
-      'deliveryCharge',
-      'usedCouponCode',
-      'itemsSummary',
-      'addressFullName',
-      'addressPhone',
-      'addressStreet',
-      'addressCity',
-      'addressState',
-      'addressPincode',
-      'createdAt_utc_iso',
-      'createdAt_ist',
-      'updatedAt_utc_iso',
-      'updatedAt_ist',
+    const headerLabels = [
+      'Order ID',
+      'Buyer name',
+      'Email',
+      'Phone',
+      'Payment status',
+      'Delivery status',
+      'Refund status',
+      'Cancel requested',
+      'Return requested',
+      'Return status',
+      'Payment gateway',
+      'Payment / txn ID',
+      'Final amount paid (₹)',
+      'Total amount (₹)',
+      'Wallet used (₹)',
+      'Delivery charge (₹)',
+      'Coupon',
+      'Items',
+      'Ship to name',
+      'Ship phone',
+      'Address line',
+      'City',
+      'State',
+      'PIN',
+      'Latest tracking update',
+      'Placed at (UTC)',
+      'Placed at (India)',
+      'Updated at (UTC)',
+      'Updated at (India)',
     ];
 
-    const rows = orders.map((o) => {
+    const colWidths = [
+      26, 20, 28, 14, 14, 16, 14, 12, 12, 14, 14, 22, 14, 14, 12, 12, 12, 40, 18, 14, 28, 14, 12, 8, 36,
+      22, 22, 22, 22,
+    ];
+
+    const colCount = headerLabels.length;
+    const thin = { style: 'thin', color: { argb: 'FF312E81' } };
+    const thinGray = { style: 'thin', color: { argb: 'FFE5E7EB' } };
+    const headerBottom = { style: 'medium', color: { argb: 'FF312E81' } };
+
+    function colLetter(index1Based) {
+      let n = index1Based;
+      let s = '';
+      while (n > 0) {
+        const m = (n - 1) % 26;
+        s = String.fromCharCode(65 + m) + s;
+        n = Math.floor((n - 1) / 26);
+      }
+      return s;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Fun-Earn Admin';
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet('Orders', {
+      properties: { tabColor: { argb: 'FF4F46E5' } },
+      views: [{ state: 'frozen', ySplit: 2 }],
+    });
+
+    sheet.mergeCells(1, 1, 1, colCount);
+    const titleCell = sheet.getCell(1, 1);
+    titleCell.value = `Order report — ${label} — ${orders.length} paid order${orders.length === 1 ? '' : 's'}`;
+    titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF312E81' },
+    };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    sheet.getRow(1).height = 40;
+
+    const headerRow = sheet.addRow(headerLabels);
+    headerRow.height = 26;
+    headerRow.eachCell((cell, colNumber) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF6366F1' },
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = {
+        top: thin,
+        left: thin,
+        bottom: headerBottom,
+        right: thin,
+      };
+      const w = colWidths[colNumber - 1];
+      if (w) sheet.getColumn(colNumber).width = w;
+    });
+
+    sheet.autoFilter = {
+      from: { row: 2, column: 1 },
+      to: { row: 2, column: colCount },
+    };
+
+    const moneyNumFmt = '#,##0.00';
+    let rowNum = 3;
+    for (const o of orders) {
       const buyer = o.buyerId && typeof o.buyerId === 'object' ? o.buyerId : null;
       const addr = o.deliveryAddress || {};
-      return [
+      const pay = o.paymentInfo || {};
+
+      const values = [
         String(o._id),
         buyer?.name || '',
         buyer?.email || '',
         buyer?.phone || '',
+        o.paymentStatus || 'paid',
         o.status || '',
-        o.paymentStatus || '',
-        o.finalAmountPaid ?? '',
-        o.totalAmount ?? '',
-        o.usedWalletAmount ?? '',
-        o.deliveryCharge ?? '',
+        o.refundStatus || '',
+        o.cancelRequested ? 'Yes' : 'No',
+        o.returnRequested ? 'Yes' : 'No',
+        o.returnStatus || '',
+        pay.gateway || '',
+        pay.paymentId || '',
+        Number(o.finalAmountPaid) || 0,
+        Number(o.totalAmount) || 0,
+        Number(o.usedWalletAmount) || 0,
+        Number(o.deliveryCharge) || 0,
         o.usedCouponCode || '',
         itemsSummaryForCsv(o.items),
         addr.fullName || '',
@@ -436,20 +499,87 @@ exports.exportOrdersCsv = async (req, res) => {
         addr.city || '',
         addr.state || '',
         addr.pincode || '',
+        lastTrackingSummary(o.trackingUpdates),
         formatUtcIso(o.createdAt),
         formatIstDisplay(o.createdAt),
         formatUtcIso(o.updatedAt),
         formatIstDisplay(o.updatedAt),
       ];
-    });
 
-    const bom = '\uFEFF';
-    const lines = [header.join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))];
-    const csv = bom + lines.join('\n');
+      const row = sheet.addRow(values);
+      const stripe = rowNum % 2 === 0;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.border = {
+          top: thinGray,
+          left: thinGray,
+          bottom: thinGray,
+          right: thinGray,
+        };
+        if (colNumber === 1) {
+          cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF374151' } };
+        } else {
+          cell.font = { name: 'Calibri', size: 10 };
+        }
+        if (stripe) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8FAFC' },
+          };
+        }
+        if (colNumber >= 13 && colNumber <= 16) {
+          cell.numFmt = moneyNumFmt;
+        }
+      });
+      rowNum += 1;
+    }
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="orders-${label}_IST.csv"`);
-    return res.status(200).send(csv);
+    if (orders.length > 0) {
+      const firstDataRow = 3;
+      const lastDataRow = 2 + orders.length;
+      const totalRow = sheet.addRow([]);
+      totalRow.height = 22;
+      const labelCell = totalRow.getCell(11);
+      labelCell.value = 'Totals';
+      labelCell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
+      labelCell.alignment = { horizontal: 'right' };
+      labelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEEF2FF' },
+      };
+      for (let c = 13; c <= 16; c += 1) {
+        const letter = colLetter(c);
+        const cell = totalRow.getCell(c);
+        cell.value = {
+          formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`,
+        };
+        cell.numFmt = moneyNumFmt;
+        cell.font = { bold: true, size: 11, color: { argb: 'FF1E1B4B' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E7FF' },
+        };
+        cell.border = {
+          top: { style: 'medium', color: { argb: 'FF6366F1' } },
+          bottom: thinGray,
+          left: thinGray,
+          right: thinGray,
+        };
+      }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="orders-paid-${label}.xlsx"`
+    );
+    return res.status(200).send(Buffer.from(buffer));
   } catch (err) {
     if (
       err.message &&
@@ -460,7 +590,7 @@ exports.exportOrdersCsv = async (req, res) => {
     ) {
       return res.status(400).json({ success: false, message: err.message });
     }
-    console.error('exportOrdersCsv Error:', err);
+    console.error('exportOrdersExcel Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
