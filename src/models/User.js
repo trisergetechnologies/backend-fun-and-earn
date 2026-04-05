@@ -84,4 +84,7 @@ const UserSchema = new mongoose.Schema({
   token: { type: String, default: "jwt_token" }, // JWT token for user sessions
 }, { timestamps: true });
 
+UserSchema.index({ referredBy: 1 });
+UserSchema.index({ referralCode: 1 });
+
 module.exports = mongoose.model('User', UserSchema);

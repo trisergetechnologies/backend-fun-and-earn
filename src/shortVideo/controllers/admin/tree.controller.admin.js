@@ -2,6 +2,9 @@ const User = require("../../../models/User");
 const Package = require("../../../models/Package");
 const EarningLog = require("../../models/EarningLog");
 const { getDistributionConfig } = require('../../../config/packageDistributionConfig');
+const { buildReferralTreeFast } = require('../../helpers/referralTreeFast');
+
+const TEAM_TREE_MODE = process.env.TEAM_TREE_MODE === 'aggregate' ? 'aggregate' : 'legacy';
 
 async function buildReferralTree(referralCode) {
   // Find all users who were referred using this referral code
@@ -49,7 +52,10 @@ exports.getTeam = async (req, res) => {
       });
     }
 
-    const referralTree = await buildReferralTree(rootUser.referralCode);
+    const referralTree =
+      TEAM_TREE_MODE === 'aggregate'
+        ? await buildReferralTreeFast(rootUser._id)
+        : await buildReferralTree(rootUser.referralCode);
 
     return res.status(200).json({
       success: true,
