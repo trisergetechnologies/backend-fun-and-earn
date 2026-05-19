@@ -14,6 +14,7 @@ const Video = require('../../models/Video');
 const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTeamWithdrawalEarnings');
 const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
 const { captureLeftovers } = require('../../helpers/captureLeftovers');
+const { isEligibleForLowLevelReward } = require('../../helpers/rewardPayoutEligibility');
 
 
 
@@ -171,6 +172,7 @@ exports.payoutWeeklyRewards = async (req, res) => {
 
     let totalPaid = 0;
     let totalReturned = 0;
+    const eligibilityCache = new Map();
 
     // Process each achievement level (1..10)
     for (let level = 1; level <= 10; level++) {
@@ -233,6 +235,26 @@ exports.payoutWeeklyRewards = async (req, res) => {
             continue;
           }
 
+          if (level <= 2) {
+            const eligible = await isEligibleForLowLevelReward(
+              usr._id,
+              wallet.lastWeeklyPayoutAt,
+              eligibilityCache
+            );
+            if (!eligible) {
+              wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
+              totalReturned = round2(totalReturned + share);
+              await SystemEarningLog.create({
+                amount: share,
+                type: 'inflow',
+                source: 'weeklyPayout',
+                context: `Level ${level} skipped: no new downline purchase since last payout`,
+                status: 'success',
+              });
+              continue;
+            }
+          }
+
           bulkUserOps.push({
             updateOne: {
               filter: { _id: usr._id },
@@ -282,6 +304,7 @@ exports.payoutWeeklyRewards = async (req, res) => {
 
     // Zero out weeklyPool (payout consumed it)
     wallet.weeklyPool = 0;
+    wallet.lastWeeklyPayoutAt = new Date();
     await wallet.save();
 
     // Log the aggregated outflow for the run
@@ -342,6 +365,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
 
     let totalPaid = 0;
     let totalReturned = 0;
+    const eligibilityCache = new Map();
 
     // Loop through all 10 achievement levels
     for (let level = 1; level <= 10; level++) {
@@ -403,6 +427,26 @@ exports.payoutMonthlyRewards = async (req, res) => {
             continue;
           }
 
+          if (level <= 2) {
+            const eligible = await isEligibleForLowLevelReward(
+              usr._id,
+              wallet.lastMonthlyPayoutAt,
+              eligibilityCache
+            );
+            if (!eligible) {
+              wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
+              totalReturned = round2(totalReturned + share);
+              await SystemEarningLog.create({
+                amount: share,
+                type: "inflow",
+                source: "monthlyPayout",
+                context: `Level ${level} skipped: no new downline purchase since last payout`,
+                status: "success",
+              });
+              continue;
+            }
+          }
+
           // Add user wallet increment
           bulkUserOps.push({
             updateOne: {
@@ -443,6 +487,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
 
     // Empty the monthly pool after payout
     wallet.monthlyPool = 0;
+    wallet.lastMonthlyPayoutAt = new Date();
     await wallet.save();
 
     // Log summary
