@@ -2,6 +2,10 @@
 
 const User = require('../../models/User');
 const PackageOrder = require('../../models/PackageOrder');
+const {
+  isEligibilityCheckSkipped,
+  getMinNewUsers,
+} = require('./rewardPayoutConfig');
 
 /**
  * BFS: collect all descendant user IDs at depths 1..maxDepth under referralCode.
@@ -36,41 +40,59 @@ async function collectDownlineUserIds(referralCode, maxDepth = 10) {
 }
 
 /**
- * True if any successful package purchase exists in the user's 10-level downline
- * after sinceDate. Null sinceDate (first payout) uses epoch (all history).
+ * Count distinct buyers with a successful package order in 10-level downline after sinceDate.
+ * Null sinceDate (first payout) uses epoch (all history).
  */
-async function hasNewDownlinePurchaseSince(userId, sinceDate) {
+async function countDistinctNewDownlineBuyersSince(userId, sinceDate) {
   const user = await User.findById(userId).select('referralCode').lean();
-  if (!user || !user.referralCode) return false;
+  if (!user || !user.referralCode) return 0;
 
   const downlineIds = await collectDownlineUserIds(user.referralCode, 10);
-  if (!downlineIds.length) return false;
+  if (!downlineIds.length) return 0;
 
   const since = sinceDate ?? new Date(0);
 
-  return Boolean(
-    await PackageOrder.exists({
-      buyerId: { $in: downlineIds },
-      status: 'success',
-      createdAt: { $gt: since },
-    })
-  );
+  const result = await PackageOrder.aggregate([
+    {
+      $match: {
+        buyerId: { $in: downlineIds },
+        status: 'success',
+        createdAt: { $gt: since },
+      },
+    },
+    { $group: { _id: '$buyerId' } },
+    { $count: 'count' },
+  ]);
+
+  return result[0]?.count ?? 0;
 }
 
 /**
- * Cached wrapper for payout runs (same user at L1 and L2 in one pass).
+ * Whether an achiever at a given pool type + achievement level may receive payout share.
  */
-async function isEligibleForLowLevelReward(userId, sinceDate, cache) {
-  const key = String(userId);
+async function isEligibleForAchievementPayout(
+  userId,
+  poolType,
+  achievementLevel,
+  sinceDate,
+  cache
+) {
+  if (isEligibilityCheckSkipped()) return true;
+
+  const minRequired = getMinNewUsers(poolType, achievementLevel);
+  if (minRequired == null) return true;
+
+  const key = `${userId}:${poolType}:${achievementLevel}`;
   if (cache.has(key)) return cache.get(key);
 
-  const result = await hasNewDownlinePurchaseSince(userId, sinceDate);
-  cache.set(key, result);
-  return result;
+  const count = await countDistinctNewDownlineBuyersSince(userId, sinceDate);
+  const eligible = count >= minRequired;
+  cache.set(key, eligible);
+  return eligible;
 }
 
 module.exports = {
   collectDownlineUserIds,
-  hasNewDownlinePurchaseSince,
-  isEligibleForLowLevelReward,
+  countDistinctNewDownlineBuyersSince,
+  isEligibleForAchievementPayout,
 };

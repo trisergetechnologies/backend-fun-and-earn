@@ -14,7 +14,11 @@ const Video = require('../../models/Video');
 const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTeamWithdrawalEarnings');
 const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
 const { captureLeftovers } = require('../../helpers/captureLeftovers');
-const { isEligibleForLowLevelReward } = require('../../helpers/rewardPayoutEligibility');
+const { isEligibleForAchievementPayout } = require('../../helpers/rewardPayoutEligibility');
+const {
+  isEligibilityCheckSkipped,
+  getMinNewUsers,
+} = require('../../helpers/rewardPayoutConfig');
 
 
 
@@ -235,20 +239,29 @@ exports.payoutWeeklyRewards = async (req, res) => {
             continue;
           }
 
-          if (level <= 2) {
-            const eligible = await isEligibleForLowLevelReward(
+          if (
+            !isEligibilityCheckSkipped() &&
+            getMinNewUsers('weekly', level) != null
+          ) {
+            const eligible = await isEligibleForAchievementPayout(
               usr._id,
+              'weekly',
+              level,
               wallet.lastWeeklyPayoutAt,
               eligibilityCache
             );
             if (!eligible) {
+              const minRequired = getMinNewUsers('weekly', level);
               wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
               totalReturned = round2(totalReturned + share);
               await SystemEarningLog.create({
                 amount: share,
                 type: 'inflow',
                 source: 'weeklyPayout',
-                context: `Level ${level} skipped: no new downline purchase since last payout`,
+                context:
+                  minRequired != null
+                    ? `Level ${level} skipped: need ${minRequired} new downline buyers since last weekly payout`
+                    : `Level ${level} skipped: eligibility not met since last weekly payout`,
                 status: 'success',
               });
               continue;
@@ -427,20 +440,29 @@ exports.payoutMonthlyRewards = async (req, res) => {
             continue;
           }
 
-          if (level <= 2) {
-            const eligible = await isEligibleForLowLevelReward(
+          if (
+            !isEligibilityCheckSkipped() &&
+            getMinNewUsers('monthly', level) != null
+          ) {
+            const eligible = await isEligibleForAchievementPayout(
               usr._id,
+              'monthly',
+              level,
               wallet.lastMonthlyPayoutAt,
               eligibilityCache
             );
             if (!eligible) {
+              const minRequired = getMinNewUsers('monthly', level);
               wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
               totalReturned = round2(totalReturned + share);
               await SystemEarningLog.create({
                 amount: share,
                 type: "inflow",
                 source: "monthlyPayout",
-                context: `Level ${level} skipped: no new downline purchase since last payout`,
+                context:
+                  minRequired != null
+                    ? `Level ${level} skipped: need ${minRequired} new downline buyers since last monthly payout`
+                    : `Level ${level} skipped: eligibility not met since last monthly payout`,
                 status: "success",
               });
               continue;

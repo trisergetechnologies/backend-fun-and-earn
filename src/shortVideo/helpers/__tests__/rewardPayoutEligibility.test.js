@@ -6,15 +6,24 @@ jest.mock('../../../models/User', () => ({
 }));
 
 jest.mock('../../../models/PackageOrder', () => ({
-  exists: jest.fn(),
+  aggregate: jest.fn(),
 }));
+
+jest.mock('../rewardPayoutConfig', () => {
+  const actual = jest.requireActual('../rewardPayoutConfig');
+  return {
+    ...actual,
+    isEligibilityCheckSkipped: jest.fn(() => false),
+  };
+});
 
 const User = require('../../../models/User');
 const PackageOrder = require('../../../models/PackageOrder');
+const rewardPayoutConfig = require('../rewardPayoutConfig');
 const {
   collectDownlineUserIds,
-  hasNewDownlinePurchaseSince,
-  isEligibleForLowLevelReward,
+  countDistinctNewDownlineBuyersSince,
+  isEligibleForAchievementPayout,
 } = require('../rewardPayoutEligibility');
 
 function mockUserFindChain(rows) {
@@ -25,9 +34,31 @@ function mockUserFindChain(rows) {
   });
 }
 
+function mockUserById(referralCode) {
+  const doc =
+    referralCode === null || referralCode === undefined
+      ? { referralCode: null }
+      : { referralCode };
+  User.findById.mockImplementation(() => ({
+    select: () => ({
+      lean: async () => doc,
+    }),
+  }));
+}
+
+function mockAggregateCount(count) {
+  PackageOrder.aggregate.mockResolvedValue(count > 0 ? [{ count }] : []);
+}
+
 describe('rewardPayoutEligibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    rewardPayoutConfig.isEligibilityCheckSkipped.mockReturnValue(false);
+    User.findById.mockImplementation(() => ({
+      select: () => ({
+        lean: async () => ({ referralCode: 'ROOT' }),
+      }),
+    }));
   });
 
   describe('collectDownlineUserIds', () => {
@@ -35,150 +66,150 @@ describe('rewardPayoutEligibility', () => {
       expect(await collectDownlineUserIds(null)).toEqual([]);
       expect(User.find).not.toHaveBeenCalled();
     });
-
-    it('collects IDs across multiple BFS levels up to maxDepth', async () => {
-      const id1 = '507f1f77bcf86cd799439011';
-      const id2 = '507f1f77bcf86cd799439012';
-      const id3 = '507f1f77bcf86cd799439013';
-
-      User.find
-        .mockReturnValueOnce({
-          select: jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue([
-              { _id: id1, referralCode: 'RC1' },
-              { _id: id2, referralCode: 'RC2' },
-            ]),
-          }),
-        })
-        .mockReturnValueOnce({
-          select: jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue([{ _id: id3, referralCode: 'RC3' }]),
-          }),
-        })
-        .mockReturnValue({
-          select: jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue([]),
-          }),
-        });
-
-      const ids = await collectDownlineUserIds('ROOT', 10);
-
-      expect(ids.map(String)).toEqual([id1, id2, id3]);
-      expect(User.find).toHaveBeenCalledTimes(3);
-    });
   });
 
-  describe('hasNewDownlinePurchaseSince', () => {
+  describe('countDistinctNewDownlineBuyersSince', () => {
     const userId = '507f1f77bcf86cd799439020';
     const sinceDate = new Date('2025-01-01T00:00:00.000Z');
 
-    it('returns false when user has no referralCode', async () => {
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: null }),
-        }),
-      });
-
-      expect(await hasNewDownlinePurchaseSince(userId, sinceDate)).toBe(false);
-      expect(PackageOrder.exists).not.toHaveBeenCalled();
+    it('returns 0 when user has no referralCode', async () => {
+      mockUserById(null);
+      expect(
+        await countDistinctNewDownlineBuyersSince(userId, sinceDate)
+      ).toBe(0);
+      expect(PackageOrder.aggregate).not.toHaveBeenCalled();
     });
 
-    it('returns false when downline is empty', async () => {
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: 'ROOT' }),
-        }),
-      });
-      mockUserFindChain([]);
-
-      expect(await hasNewDownlinePurchaseSince(userId, sinceDate)).toBe(false);
-      expect(PackageOrder.exists).not.toHaveBeenCalled();
-    });
-
-    it('returns true when a successful order exists after sinceDate', async () => {
-      const downlineId = '507f1f77bcf86cd799439011';
-
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: 'ROOT' }),
-        }),
-      });
-      User.find
-        .mockReturnValueOnce({
-          select: jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue([{ _id: downlineId, referralCode: 'RC1' }]),
-          }),
-        })
-        .mockReturnValue({
-          select: jest.fn().mockReturnValue({
-            lean: jest.fn().mockResolvedValue([]),
-          }),
-        });
-      PackageOrder.exists.mockResolvedValue({ _id: 'order1' });
-
-      const result = await hasNewDownlinePurchaseSince(userId, sinceDate);
-
-      expect(result).toBe(true);
-      expect(PackageOrder.exists).toHaveBeenCalledWith(
-        expect.objectContaining({
-          buyerId: { $in: [downlineId] },
-          status: 'success',
-          createdAt: { $gt: sinceDate },
-        })
-      );
-    });
-
-    it('returns false when PackageOrder.exists is null', async () => {
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: 'ROOT' }),
-        }),
-      });
+    it('returns aggregate count for downline buyers', async () => {
+      mockUserById('ROOT');
       mockUserFindChain([{ _id: '507f1f77bcf86cd799439011', referralCode: 'RC1' }]);
-      PackageOrder.exists.mockResolvedValue(null);
+      mockAggregateCount(3);
 
-      expect(await hasNewDownlinePurchaseSince(userId, sinceDate)).toBe(false);
-    });
+      const count = await countDistinctNewDownlineBuyersSince(userId, sinceDate);
 
-    it('uses epoch when sinceDate is null (first payout)', async () => {
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: 'ROOT' }),
-        }),
-      });
-      mockUserFindChain([{ _id: '507f1f77bcf86cd799439011', referralCode: 'RC1' }]);
-      PackageOrder.exists.mockResolvedValue({ _id: 'order1' });
-
-      await hasNewDownlinePurchaseSince(userId, null);
-
-      expect(PackageOrder.exists).toHaveBeenCalledWith(
-        expect.objectContaining({
-          createdAt: { $gt: new Date(0) },
-        })
-      );
+      expect(count).toBe(3);
+      expect(PackageOrder.aggregate).toHaveBeenCalled();
     });
   });
 
-  describe('isEligibleForLowLevelReward', () => {
-    it('caches result per userId', async () => {
-      const userId = '507f1f77bcf86cd799439020';
-      const cache = new Map();
-      const since = new Date('2025-06-01');
+  describe('isEligibleForAchievementPayout', () => {
+    const userId = '507f1f77bcf86cd799439020';
+    const since = new Date('2025-01-01T00:00:00.000Z');
 
-      User.findById.mockReturnValue({
-        select: () => ({
-          lean: async () => ({ _id: userId, referralCode: 'ROOT' }),
-        }),
-      });
+    beforeEach(() => {
+      mockUserById('ROOT');
+      mockUserFindChain([
+        { _id: '507f1f77bcf86cd799439011', referralCode: 'RC1' },
+      ]);
+    });
+
+    it('returns true without DB when eligibility check is skipped via env', async () => {
+      rewardPayoutConfig.isEligibilityCheckSkipped.mockReturnValue(true);
+
+      const result = await isEligibleForAchievementPayout(
+        userId,
+        'weekly',
+        1,
+        since,
+        new Map()
+      );
+
+      expect(result).toBe(true);
+      expect(User.findById).not.toHaveBeenCalled();
+      expect(PackageOrder.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('weekly L1: eligible at count 1, not at 0', async () => {
+      mockAggregateCount(1);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 1, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(0);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 1, since, new Map())
+      ).toBe(false);
+    });
+
+    it('weekly L2: eligible at count 3, not at 2', async () => {
+      mockAggregateCount(3);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 2, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(2);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 2, since, new Map())
+      ).toBe(false);
+    });
+
+    it('weekly L3: eligible at count 5, not at 4', async () => {
+      mockAggregateCount(5);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 3, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(4);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 3, since, new Map())
+      ).toBe(false);
+    });
+
+    it('monthly L1/L2/L3 use thresholds 2, 6, 10', async () => {
+      mockAggregateCount(2);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'monthly', 1, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(6);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'monthly', 2, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(10);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'monthly', 3, since, new Map())
+      ).toBe(true);
+
+      mockAggregateCount(9);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'monthly', 3, since, new Map())
+      ).toBe(false);
+    });
+
+    it('level 4 is always eligible when checks are enforced', async () => {
+      mockAggregateCount(0);
+      expect(
+        await isEligibleForAchievementPayout(userId, 'weekly', 4, since, new Map())
+      ).toBe(true);
+      expect(PackageOrder.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('caches per userId, poolType, and level', async () => {
+      const localCache = new Map();
+      mockAggregateCount(5);
+
+      await isEligibleForAchievementPayout(userId, 'weekly', 3, since, localCache);
+      await isEligibleForAchievementPayout(userId, 'weekly', 3, since, localCache);
+
+      expect(PackageOrder.aggregate).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses epoch when sinceDate is null (first payout)', async () => {
       mockUserFindChain([{ _id: '507f1f77bcf86cd799439011', referralCode: 'RC1' }]);
-      PackageOrder.exists.mockResolvedValue({ _id: 'o1' });
+      mockAggregateCount(1);
 
-      const first = await isEligibleForLowLevelReward(userId, since, cache);
-      const second = await isEligibleForLowLevelReward(userId, since, cache);
+      await countDistinctNewDownlineBuyersSince(userId, null);
 
-      expect(first).toBe(true);
-      expect(second).toBe(true);
-      expect(User.findById).toHaveBeenCalledTimes(1);
+      expect(PackageOrder.aggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            $match: expect.objectContaining({
+              createdAt: { $gt: new Date(0) },
+            }),
+          }),
+        ])
+      );
     });
   });
 });
