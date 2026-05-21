@@ -46,4 +46,9 @@ const EarningLogSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Tree/admin: find({ userId }).sort({ createdAt: -1 })
+EarningLogSchema.index({ userId: 1, createdAt: -1 });
+// Payout aggregates filter by source + time
+EarningLogSchema.index({ source: 1, createdAt: -1 });
+
 module.exports = mongoose.model('EarningLog', EarningLogSchema);

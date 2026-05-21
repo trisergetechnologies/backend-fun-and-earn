@@ -80,4 +80,7 @@ const WalletTransactionSchema = new mongoose.Schema({
   // Timestamp
 }, { timestamps: true });
 
+// Wallet history: find({ userId }).sort({ createdAt: -1 })
+WalletTransactionSchema.index({ userId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('WalletTransaction', WalletTransactionSchema);

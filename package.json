@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --no-cache --forceExit",
-    "start": "node ./src/server.js"
+    "start": "node ./src/server.js",
+    "db:ensure-indexes": "node scripts/ensureIndexes.js",
+    "db:ensure-indexes:backfill": "node scripts/ensureIndexes.js --backfill"
   },
   "keywords": [],
   "author": "",

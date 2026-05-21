@@ -86,5 +86,12 @@ const UserSchema = new mongoose.Schema({
 
 UserSchema.index({ referredBy: 1 });
 UserSchema.index({ referralCode: 1 });
+// Admin watch-time leaderboard: sort by shortVideoProfile.watchTime
+UserSchema.index({ 'shortVideoProfile.watchTime': -1 });
+// Reward wallet sweep: find({ 'wallets.shortVideoWallet': { $gt: 0 } })
+UserSchema.index(
+  { 'wallets.shortVideoWallet': 1 },
+  { partialFilterExpression: { 'wallets.shortVideoWallet': { $gt: 0 } } }
+);
 
 module.exports = mongoose.model('User', UserSchema);

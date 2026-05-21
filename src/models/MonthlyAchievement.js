@@ -25,5 +25,7 @@ const MonthlyAchievementSchema = new mongoose.Schema({
 
 // ✅ Ensure one user cannot have the same monthly achievement level twice
 MonthlyAchievementSchema.index({ userId: 1, level: 1 }, { unique: true });
+// Monthly payout: MonthlyAchievement.find({ level })
+MonthlyAchievementSchema.index({ level: 1 });
 
 module.exports = mongoose.model('MonthlyAchievement', MonthlyAchievementSchema);

@@ -47,4 +47,7 @@ const SystemEarningLogSchema = new mongoose.Schema({
   status: { type: String, enum: ['success', 'failed'], default: 'success' }
 }, { timestamps: true });
 
+// Admin list: find(filter).sort({ createdAt: -1 })
+SystemEarningLogSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('SystemEarningLog', SystemEarningLogSchema);

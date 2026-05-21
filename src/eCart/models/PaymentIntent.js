@@ -47,4 +47,11 @@ const PaymentIntentSchema = new mongoose.Schema({
   meta: { type: Object, default: {} }
 }, { timestamps: true });
 
+// Webhooks / verify: findOne({ razorpayOrderId })
+PaymentIntentSchema.index({ razorpayOrderId: 1 }, { sparse: true });
+// reconcileRazorpayPayments: status + expiresAt
+PaymentIntentSchema.index({ status: 1, expiresAt: 1 });
+// Idempotent checkout: findOne({ userId, idempotencyKey, status })
+PaymentIntentSchema.index({ userId: 1, idempotencyKey: 1 }, { sparse: true });
+
 module.exports = mongoose.model('PaymentIntent', PaymentIntentSchema);

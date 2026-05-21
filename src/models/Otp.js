@@ -21,4 +21,8 @@ const otpSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Auth flows: findOne / deleteMany({ email }), findOne({ email, otp })
+otpSchema.index({ email: 1 });
+otpSchema.index({ email: 1, otp: 1 });
+
 module.exports = mongoose.model('Otp', otpSchema);

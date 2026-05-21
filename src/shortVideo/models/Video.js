@@ -18,4 +18,9 @@ const VideoSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
+// User uploads / admin profile: find({ userId }).sort({ createdAt: -1 })
+VideoSchema.index({ userId: 1, createdAt: -1 });
+// Feed: match({ isActive: true })
+VideoSchema.index({ isActive: 1 });
+
 module.exports = mongoose.model('Video', VideoSchema);

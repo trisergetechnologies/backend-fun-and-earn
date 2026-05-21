@@ -37,4 +37,7 @@ const PackageSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Active catalog: find({ isActive: true }).sort({ price: 1 })
+PackageSchema.index({ isActive: 1, price: 1 });
+
 module.exports = mongoose.model('Package', PackageSchema);

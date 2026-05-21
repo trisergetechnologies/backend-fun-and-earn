@@ -181,6 +181,15 @@ const OrderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// User/admin order lists: find({ buyerId }).sort({ createdAt })
+OrderSchema.index({ buyerId: 1, createdAt: -1 });
+// packageBuyCron: find({ paymentStatus, isPackageCronProcessed })
+OrderSchema.index({ paymentStatus: 1, isPackageCronProcessed: 1 });
+// Admin filters + default sort by createdAt
+OrderSchema.index({ status: 1, createdAt: -1 });
+// Admin seller filter on nested items
+OrderSchema.index({ 'items.sellerId': 1, createdAt: -1 });
+
 OrderSchema.pre('save', async function assignPublicOrderIdAndDefaults() {
   if (this.isPackageCronProcessed === undefined || this.isPackageCronProcessed === null) {
     this.isPackageCronProcessed = false;

@@ -66,4 +66,9 @@ const WithdrawalRequestSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Pending check: findOne({ user, status: 'pending' })
+WithdrawalRequestSchema.index({ user: 1, status: 1 });
+// Admin list: filter by status, sort createdAt
+WithdrawalRequestSchema.index({ status: 1, createdAt: -1 });
+
 module.exports = mongoose.model('WithdrawalRequest', WithdrawalRequestSchema);

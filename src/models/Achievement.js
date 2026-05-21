@@ -26,5 +26,7 @@ const AchievementSchema = new mongoose.Schema({
 
 // Ensure one user cannot have the same achievement level recorded twice
 AchievementSchema.index({ userId: 1, level: 1 }, { unique: true });
+// Weekly payout: Achievement.find({ level })
+AchievementSchema.index({ level: 1 });
 
 module.exports = mongoose.model('Achievement', AchievementSchema);

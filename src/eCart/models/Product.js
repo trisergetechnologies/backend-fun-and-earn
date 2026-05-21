@@ -86,4 +86,11 @@ const ProductSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Category browse: find({ categoryId, isActive })
+ProductSchema.index({ categoryId: 1, isActive: 1 });
+// Seller admin lists
+ProductSchema.index({ sellerId: 1, createdAt: -1 });
+// Catalog: find({ isActive: true })
+ProductSchema.index({ isActive: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Product', ProductSchema);

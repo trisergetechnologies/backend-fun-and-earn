@@ -93,4 +93,9 @@ const PackageOrderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// User history: find({ buyerId }).sort({ createdAt: -1 })
+PackageOrderSchema.index({ buyerId: 1, createdAt: -1 });
+// rewardPayoutEligibility aggregate: buyerId + status + createdAt range
+PackageOrderSchema.index({ buyerId: 1, status: 1, createdAt: -1 });
+
 module.exports = mongoose.model('PackageOrder', PackageOrderSchema);

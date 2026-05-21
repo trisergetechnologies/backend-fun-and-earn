@@ -26,4 +26,7 @@ const VideoWatchHistorySchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// logWatchTime: findOne({ userId, videoId })
+VideoWatchHistorySchema.index({ userId: 1, videoId: 1 });
+
 module.exports = mongoose.model('VideoWatchHistory', VideoWatchHistorySchema);

@@ -48,4 +48,9 @@ const CouponSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Profile/history: find({ earnedBy }).sort({ createdAt: -1 })
+CouponSchema.index({ earnedBy: 1, createdAt: -1 });
+// Redeem: findOne({ code, earnedBy, isActive, isRedeemed }) — code already unique globally
+CouponSchema.index({ earnedBy: 1, isActive: 1, isRedeemed: 1 });
+
 module.exports = mongoose.model('Coupon', CouponSchema);
