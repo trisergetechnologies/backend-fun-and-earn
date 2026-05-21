@@ -4,12 +4,12 @@ jest.mock('../../../services/rewardsPayoutEligible.service', () => ({
   getPayoutEligibleUsers: jest.fn(),
 }));
 
-jest.mock('../../../models/EarningLog', () => ({
-  aggregate: jest.fn(),
+jest.mock('../../../services/topEarners.service', () => ({
+  getTopEarnersPage: jest.fn(),
 }));
 
 const { getPayoutEligibleUsers } = require('../../../services/rewardsPayoutEligible.service');
-const EarningLog = require('../../../models/EarningLog');
+const { getTopEarnersPage } = require('../../../services/topEarners.service');
 const { getPayoutEligible, getTopEarners } = require('../rewards.controller.user');
 
 describe('rewards.controller.user', () => {
@@ -56,10 +56,10 @@ describe('rewards.controller.user', () => {
 
   describe('getTopEarners', () => {
     it('returns ranked users with pagination', async () => {
-      EarningLog.aggregate
-        .mockResolvedValueOnce([{ total: 2 }])
-        .mockResolvedValueOnce([
+      getTopEarnersPage.mockResolvedValue({
+        users: [
           {
+            rank: 1,
             userId: '507f1f77bcf86cd799439001',
             totalEarned: 500,
             name: 'Alice',
@@ -67,21 +67,16 @@ describe('rewards.controller.user', () => {
             referralCode: 'A1',
             packageName: 'Gold',
           },
-          {
-            userId: '507f1f77bcf86cd799439002',
-            totalEarned: 300,
-            name: 'Bob',
-            serialNumber: 2,
-            referralCode: 'B2',
-            packageName: null,
-          },
-        ]);
+        ],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1, hasMore: false },
+      });
 
       const req = { query: { page: 1, limit: 20 } };
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
       await getTopEarners(req, res);
 
+      expect(getTopEarnersPage).toHaveBeenCalledWith({ page: 1, limit: 15 });
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
@@ -89,7 +84,6 @@ describe('rewards.controller.user', () => {
             users: expect.arrayContaining([
               expect.objectContaining({ rank: 1, name: 'Alice', totalEarned: 500 }),
             ]),
-            pagination: expect.objectContaining({ total: 2, hasMore: false }),
           }),
         })
       );

@@ -12,7 +12,8 @@ const {
 } = require('../helpers/rewardPayoutConfig');
 const { countDistinctNewDownlineBuyersSince } = require('../helpers/rewardPayoutEligibility');
 
-const MAX_SCAN_USERS = 500;
+const MAX_SCAN_USERS = 120;
+const PARALLEL_BATCH = 15;
 
 function getThresholdsMap(poolType) {
   return poolType === 'monthly' ? MONTHLY_MIN_NEW_USERS : WEEKLY_MIN_NEW_USERS;
@@ -35,28 +36,11 @@ function computeEligibleLevels(heldLevels, poolType, newBuyers, rulesActive) {
   return eligible.sort((a, b) => a - b);
 }
 
-function computeRequiredForDisplay(heldLevels, poolType, rulesActive) {
-  if (!rulesActive) return null;
-  let max = 0;
-  let hasGated = false;
-  for (const level of heldLevels) {
-    const min = getMinNewUsers(poolType, level);
-    if (min != null) {
-      hasGated = true;
-      max = Math.max(max, min);
-    }
-  }
-  return hasGated ? max : null;
-}
-
 async function buildPayoutReadyRow(group, poolType, sinceDate, rulesActive) {
   const userId = group._id;
-  const achievements = group.achievements || [];
+  const achievements = (group.achievements || []).sort((a, b) => a.level - b.level);
   const heldLevels = achievements.map((a) => a.level);
   if (!heldLevels.length) return null;
-
-  const highestLevel = Math.max(...heldLevels);
-  const primary = achievements.find((a) => a.level === highestLevel) || achievements[0];
 
   const newBuyers = rulesActive
     ? await countDistinctNewDownlineBuyersSince(userId, sinceDate)
@@ -84,13 +68,37 @@ async function buildPayoutReadyRow(group, poolType, sinceDate, rulesActive) {
     serialNumber: user.serialNumber ?? null,
     referralCode: user.referralCode || '',
     packageName: user.package?.name || null,
-    primaryAchievementTitle: primary.title,
-    highestAchievementLevel: highestLevel,
-    eligibleLevels,
+    achievements: achievements.map((a) => ({
+      level: a.level,
+      title: a.title,
+    })),
     newBuyersSinceLastPayout: newBuyers,
-    requiredForDisplay: computeRequiredForDisplay(heldLevels, poolType, rulesActive),
     isEligible: true,
   };
+}
+
+async function collectEligibleUsers(grouped, poolType, sinceDate, rulesActive, pageNum, limitNum) {
+  const targetEnd = pageNum * limitNum;
+  const needCount = targetEnd + 1;
+  const allEligible = [];
+  let scannedAll = true;
+
+  for (let i = 0; i < grouped.length; i += PARALLEL_BATCH) {
+    const chunk = grouped.slice(i, i + PARALLEL_BATCH);
+    const rows = await Promise.all(
+      chunk.map((g) => buildPayoutReadyRow(g, poolType, sinceDate, rulesActive))
+    );
+    for (const row of rows) {
+      if (row) allEligible.push(row);
+    }
+
+    if (allEligible.length >= needCount && i + PARALLEL_BATCH < grouped.length) {
+      scannedAll = false;
+      break;
+    }
+  }
+
+  return { allEligible, scannedAll };
 }
 
 /**
@@ -119,18 +127,23 @@ async function getPayoutEligibleUsers({ poolType, page = 1, limit = 20 }) {
     { $limit: MAX_SCAN_USERS },
   ]);
 
-  const allEligible = [];
-  for (const group of grouped) {
-    const row = await buildPayoutReadyRow(group, poolType, sinceDate, rulesActive);
-    if (row) allEligible.push(row);
-  }
-
   const pageNum = Math.max(1, Number(page) || 1);
   const limitNum = Math.min(50, Math.max(1, Number(limit) || 20));
-  const total = allEligible.length;
+
+  const { allEligible, scannedAll } = await collectEligibleUsers(
+    grouped,
+    poolType,
+    sinceDate,
+    rulesActive,
+    pageNum,
+    limitNum
+  );
+
   const start = (pageNum - 1) * limitNum;
   const users = allEligible.slice(start, start + limitNum);
-  const totalPages = Math.ceil(total / limitNum) || 1;
+  const hasMoreInBuffer = allEligible.length > pageNum * limitNum;
+  const hasMore =
+    hasMoreInBuffer || (!scannedAll && grouped.length === MAX_SCAN_USERS);
 
   return {
     meta: {
@@ -143,9 +156,9 @@ async function getPayoutEligibleUsers({ poolType, page = 1, limit = 20 }) {
     pagination: {
       page: pageNum,
       limit: limitNum,
-      total,
-      totalPages,
-      hasMore: pageNum < totalPages,
+      total: scannedAll ? allEligible.length : allEligible.length,
+      totalPages: hasMore ? pageNum + 1 : Math.max(1, Math.ceil(allEligible.length / limitNum)),
+      hasMore,
     },
   };
 }

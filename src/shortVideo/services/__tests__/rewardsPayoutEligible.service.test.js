@@ -103,9 +103,12 @@ describe('rewardsPayoutEligible.service', () => {
       expect(result.meta.poolType).toBe('weekly');
       expect(result.meta.eligibilityRulesActive).toBe(true);
       expect(result.users).toHaveLength(1);
-      expect(result.users[0].eligibleLevels).toEqual([1, 2]);
+      expect(result.users[0].achievements).toEqual([
+        { level: 1, title: 'Emerging Leader Bonus' },
+        { level: 2, title: 'Team Builder Bonus' },
+      ]);
       expect(result.users[0].newBuyersSinceLastPayout).toBe(4);
-      expect(result.pagination.total).toBe(1);
+      expect(result.pagination.hasMore).toBe(false);
     });
   });
 });
