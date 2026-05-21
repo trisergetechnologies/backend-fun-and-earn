@@ -15,6 +15,7 @@ const { distributeTeamWithdrawalEarnings } = require('../../helpers/distributeTe
 const { distributeNetworkWithdrawalEarnings } = require('../../helpers/distributeNetworkWithdrawalEarnings');
 const { captureLeftovers } = require('../../helpers/captureLeftovers');
 const { isEligibleForAchievementPayout } = require('../../helpers/rewardPayoutEligibility');
+const { invalidatePayoutEligibleCache } = require('../../services/adminPayoutEligible.service');
 const {
   isEligibilityCheckSkipped,
   getMinNewUsers,
@@ -330,6 +331,8 @@ exports.payoutWeeklyRewards = async (req, res) => {
       status: 'success'
     });
 
+    invalidatePayoutEligibleCache();
+
     return res.status(200).json({
       success: true,
       message: 'Weekly rewards distributed',
@@ -521,6 +524,8 @@ exports.payoutMonthlyRewards = async (req, res) => {
       context: `Monthly payout completed. totalPaid=${totalPaid}, totalReturned=${totalReturned}`,
       status: "success"
     });
+
+    invalidatePayoutEligibleCache();
 
     return res.status(200).json({
       success: true,
