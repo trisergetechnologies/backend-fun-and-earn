@@ -20,102 +20,26 @@ const {
   isEligibilityCheckSkipped,
   getMinNewUsers,
 } = require('../../helpers/rewardPayoutConfig');
-
-
-
-function mapSystemLogRow(doc) {
-  const u = doc.fromUserDoc;
-  return {
-    _id: doc._id,
-    amount: doc.amount,
-    type: doc.type,
-    source: doc.source,
-    context: doc.context || '',
-    status: doc.status,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-    fromUser: u
-      ? {
-          id: String(u._id),
-          name: u.name || '',
-          serialNumber: u.serialNumber ?? null,
-        }
-      : null,
-  };
-}
+const { getSystemEarningLogsPage } = require('../../services/systemEarningLogs.service');
 
 exports.getSystemEarningLogs = async (req, res) => {
   try {
     const { limit = 20, page = 1, search, type, source } = req.query;
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
-    const pageNum = Math.max(1, Number(page));
-    const skip = (pageNum - 1) * limitNum;
 
-    const match = {};
-    if (type && type !== 'all' && ['inflow', 'outflow'].includes(type)) {
-      match.type = type;
-    }
-    if (source && source !== 'all' && typeof source === 'string') {
-      match.source = source;
-    }
-
-    const pipeline = [
-      { $match: match },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'fromUser',
-          foreignField: '_id',
-          as: 'fromUserDoc',
-        },
-      },
-      { $unwind: { path: '$fromUserDoc', preserveNullAndEmptyArrays: true } },
-    ];
-
-    if (search && typeof search === 'string' && search.trim()) {
-      const term = search.trim();
-      const serialNum = Number(term);
-      const or = [
-        { source: { $regex: term, $options: 'i' } },
-        { context: { $regex: term, $options: 'i' } },
-        { status: { $regex: term, $options: 'i' } },
-        { 'fromUserDoc.name': { $regex: term, $options: 'i' } },
-      ];
-      if (!Number.isNaN(serialNum)) {
-        or.push({ 'fromUserDoc.serialNumber': serialNum });
-      }
-      pipeline.push({ $match: { $or: or } });
-    }
-
-    pipeline.push(
-      { $sort: { createdAt: -1 } },
-      {
-        $facet: {
-          rows: [{ $skip: skip }, { $limit: limitNum }],
-          total: [{ $count: 'count' }],
-        },
-      }
-    );
-
-    const [facet] = await SystemEarningLog.aggregate(pipeline);
-    const rows = facet?.rows ?? [];
-    const total = facet?.total?.[0]?.count ?? 0;
-    const logs = rows.map(mapSystemLogRow);
+    const data = await getSystemEarningLogsPage({
+      page,
+      limit,
+      search,
+      type,
+      source,
+    });
 
     return res.status(200).json({
       success: true,
-      message: logs.length
+      message: data.logs.length
         ? 'System earning logs fetched successfully'
         : 'No earning logs found',
-      data: {
-        logs,
-        pagination: {
-          total,
-          page: pageNum,
-          limit: limitNum,
-          totalPages: Math.ceil(total / limitNum) || 1,
-        },
-      },
+      data,
     });
   } catch (err) {
     console.error('Get System Earning Logs Error:', err);

@@ -1,46 +1,51 @@
 'use strict';
 
-jest.mock('../../../../models/SystemEarningLog', () => ({
-  aggregate: jest.fn(),
+jest.mock('../../../services/systemEarningLogs.service', () => ({
+  getSystemEarningLogsPage: jest.fn(),
 }));
 
-const SystemEarningLog = require('../../../../models/SystemEarningLog');
+const { getSystemEarningLogsPage } = require('../../../services/systemEarningLogs.service');
 const { getSystemEarningLogs } = require('../system.controller.admin');
 
-describe('getSystemEarningLogs', () => {
+describe('getSystemEarningLogs controller', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('returns logs with populated fromUser shape', async () => {
-    SystemEarningLog.aggregate.mockResolvedValue([
-      {
-        rows: [
-          {
-            _id: 'log1',
-            amount: 100,
-            type: 'inflow',
-            source: 'teamPurchase',
-            context: 'Test',
-            status: 'success',
-            createdAt: new Date('2025-01-01'),
-            updatedAt: new Date('2025-01-01'),
-            fromUserDoc: {
-              _id: '507f1f77bcf86cd799439011',
-              name: 'Alice',
-              serialNumber: 42,
-            },
+    getSystemEarningLogsPage.mockResolvedValue({
+      logs: [
+        {
+          _id: 'log1',
+          amount: 100,
+          type: 'inflow',
+          source: 'teamPurchase',
+          context: 'Test',
+          status: 'success',
+          createdAt: new Date('2025-01-01'),
+          updatedAt: new Date('2025-01-01'),
+          fromUser: {
+            id: '507f1f77bcf86cd799439011',
+            name: 'Alice',
+            serialNumber: 42,
           },
-        ],
-        total: [{ count: 1 }],
-      },
-    ]);
+        },
+      ],
+      pagination: { total: 1, page: 1, limit: 20, totalPages: 1 },
+    });
 
     const req = { query: { page: 1, limit: 20 } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
     await getSystemEarningLogs(req, res);
 
+    expect(getSystemEarningLogsPage).toHaveBeenCalledWith({
+      page: 1,
+      limit: 20,
+      search: undefined,
+      type: undefined,
+      source: undefined,
+    });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -58,5 +63,27 @@ describe('getSystemEarningLogs', () => {
         }),
       })
     );
+  });
+
+  it('passes filters to service', async () => {
+    getSystemEarningLogsPage.mockResolvedValue({
+      logs: [],
+      pagination: { total: 0, page: 1, limit: 20, totalPages: 1 },
+    });
+
+    const req = {
+      query: { page: 2, limit: 10, search: 'weekly', type: 'outflow', source: 'weeklyPayout' },
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+    await getSystemEarningLogs(req, res);
+
+    expect(getSystemEarningLogsPage).toHaveBeenCalledWith({
+      page: 2,
+      limit: 10,
+      search: 'weekly',
+      type: 'outflow',
+      source: 'weeklyPayout',
+    });
   });
 });
