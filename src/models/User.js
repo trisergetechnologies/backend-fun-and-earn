@@ -52,7 +52,7 @@ const UserSchema = new mongoose.Schema({
   // Short video-specific profile
   shortVideoProfile: {
     watchTime: { type: Number, default: 0 },   //in seconds
-    videoUploads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Video' }] // Max 100 enforced in controller
+    videoUploads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Video' }]
   },
 
   // E-Cart-specific profile

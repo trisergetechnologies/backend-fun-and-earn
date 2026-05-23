@@ -22,5 +22,7 @@ const VideoSchema = new mongoose.Schema({
 VideoSchema.index({ userId: 1, createdAt: -1 });
 // Feed: match({ isActive: true })
 VideoSchema.index({ isActive: 1 });
+// Retention cron: oldest-first eviction
+VideoSchema.index({ createdAt: 1 });
 
 module.exports = mongoose.model('Video', VideoSchema);

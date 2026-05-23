@@ -37,6 +37,13 @@ try {
   console.error('packageBuyCron failed', e);
 }
 
+try {
+  require('./jobs/videoRetentionCron');
+  console.log('videoRetentionCron loaded');
+} catch (e) {
+  console.error('videoRetentionCron failed', e);
+}
+
 /**
  * Creates a new Express application with base configuration
  * 
