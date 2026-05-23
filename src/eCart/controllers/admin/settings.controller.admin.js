@@ -1,4 +1,8 @@
 const Settings = require('../../../models/Settings');
+const {
+  validateAdsSettingsUpdate,
+  clampDailyLimit,
+} = require('../../../shortVideo/services/adsPolicy.service');
 
 exports.getSettings = async (req, res) => {
   try {
@@ -30,14 +34,30 @@ exports.updateSettings = async (req, res) => {
       'referralBonus',
       'deliveryMode',
       'deliveryChargeAmount',
-      'freeDeliveryAbove'
+      'freeDeliveryAbove',
+      'adsDailyInterstitialLimit',
+      'adsBannerEnabled',
     ];
+
+    const adsErrors = validateAdsSettingsUpdate(req.body);
+    if (adsErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: adsErrors.join('; '),
+        data: null,
+      });
+    }
 
     const updateData = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updateData[field] = req.body[field];
       }
+    }
+    if (updateData.adsDailyInterstitialLimit !== undefined) {
+      updateData.adsDailyInterstitialLimit = clampDailyLimit(
+        updateData.adsDailyInterstitialLimit
+      );
     }
     updateData.updatedAt = Date.now();
 

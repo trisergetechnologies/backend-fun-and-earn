@@ -12,6 +12,8 @@ const SettingsSchema = new mongoose.Schema({
   },
   deliveryChargeAmount: { type: Number, default: 0 },
   freeDeliveryAbove: { type: Number, default: 500 },
+  adsDailyInterstitialLimit: { type: Number, default: 5 },
+  adsBannerEnabled: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedAt: { type: Date, default: Date.now }
 });

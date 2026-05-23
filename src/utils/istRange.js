@@ -40,6 +40,16 @@ function getIstTodayRange(now = new Date()) {
 }
 
 /**
+ * IST calendar date as YYYY-MM-DD for per-day counters.
+ * @param {Date} [now]
+ * @returns {string}
+ */
+function getIstDateKey(now = new Date()) {
+  const { year, month0, day } = istWallFromUtc(now);
+  return `${year}-${String(month0 + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
  * @param {number} year
  * @param {number} month1to12 1-12
  * @returns {{ startUtc: Date, endUtc: Date }}
@@ -143,6 +153,7 @@ module.exports = {
   IST_OFFSET_MS,
   istMidnightToUtc,
   istWallFromUtc,
+  getIstDateKey,
   getIstTodayRange,
   getIstMonthRange,
   getIstDayRange,

@@ -4,6 +4,9 @@ const EarningLog = require('../models/EarningLog');
 const UserEarningLeaderboard = require('../models/UserEarningLeaderboard');
 const User = require('../../models/User');
 
+/** Serial numbers 1–22 are excluded from the public top earners list. */
+const MIN_TOP_EARNER_SERIAL = 23;
+
 let syncInProgress = null;
 
 function startBackgroundRebuild() {
@@ -41,6 +44,21 @@ async function rebuildLeaderboardFromLogs() {
   }
 }
 
+function lookupUserStage(localField) {
+  return {
+    $lookup: {
+      from: 'users',
+      localField,
+      foreignField: '_id',
+      as: 'user',
+    },
+  };
+}
+
+function eligibleSerialMatch() {
+  return { 'user.serialNumber': { $gte: MIN_TOP_EARNER_SERIAL } };
+}
+
 async function hydrateUsers(pageRows, rankOffset) {
   const userIds = pageRows.map((r) => r.userId);
   const users = await User.find({ _id: { $in: userIds } })
@@ -69,20 +87,23 @@ async function hydrateUsers(pageRows, rankOffset) {
  * One-page aggregate while materialized leaderboard is empty (non-blocking).
  */
 async function getTopEarnersFromAggregate({ pageNum, limitNum, skip }) {
-  const [countRows, aggRows] = await Promise.all([
-    EarningLog.aggregate([
-      { $match: { status: 'success' } },
-      { $group: { _id: '$userId' } },
-      { $count: 'total' },
-    ]),
-    EarningLog.aggregate([
-      { $match: { status: 'success' } },
-      {
-        $group: {
-          _id: '$userId',
-          totalEarned: { $sum: '$amount' },
-        },
+  const baseStages = [
+    { $match: { status: 'success' } },
+    {
+      $group: {
+        _id: '$userId',
+        totalEarned: { $sum: '$amount' },
       },
+    },
+    lookupUserStage('_id'),
+    { $unwind: '$user' },
+    { $match: eligibleSerialMatch() },
+  ];
+
+  const [countRows, aggRows] = await Promise.all([
+    EarningLog.aggregate([...baseStages, { $count: 'total' }]),
+    EarningLog.aggregate([
+      ...baseStages,
       { $sort: { totalEarned: -1, _id: 1 } },
       { $skip: skip },
       { $limit: limitNum + 1 },
@@ -114,7 +135,7 @@ async function getTopEarnersFromAggregate({ pageNum, limitNum, skip }) {
 }
 
 /**
- * Fast paginated top earners from materialized totals.
+ * Fast paginated top earners from materialized totals (serial >= 23 only).
  */
 async function getTopEarnersPage({ page = 1, limit = 20 }) {
   const pageNum = Math.max(1, Number(page) || 1);
@@ -126,18 +147,26 @@ async function getTopEarnersPage({ page = 1, limit = 20 }) {
     return getTopEarnersFromAggregate({ pageNum, limitNum, skip });
   }
 
-  const [total, rows] = await Promise.all([
-    UserEarningLeaderboard.countDocuments(),
-    UserEarningLeaderboard.find()
-      .sort({ totalEarned: -1, userId: 1 })
-      .skip(skip)
-      .limit(limitNum + 1)
-      .select('userId totalEarned')
-      .lean(),
+  const filterStages = [
+    lookupUserStage('userId'),
+    { $unwind: '$user' },
+    { $match: eligibleSerialMatch() },
+  ];
+
+  const [countRows, aggRows] = await Promise.all([
+    UserEarningLeaderboard.aggregate([...filterStages, { $count: 'total' }]),
+    UserEarningLeaderboard.aggregate([
+      ...filterStages,
+      { $sort: { totalEarned: -1, userId: 1 } },
+      { $skip: skip },
+      { $limit: limitNum + 1 },
+      { $project: { userId: 1, totalEarned: 1 } },
+    ]),
   ]);
 
-  const hasMore = rows.length > limitNum;
-  const pageRows = rows.slice(0, limitNum);
+  const total = countRows[0]?.total ?? 0;
+  const hasMore = aggRows.length > limitNum;
+  const pageRows = aggRows.slice(0, limitNum);
   const users = await hydrateUsers(pageRows, skip);
   const totalPages = Math.ceil(total / limitNum) || 1;
 
@@ -157,4 +186,5 @@ module.exports = {
   getTopEarnersPage,
   rebuildLeaderboardFromLogs,
   startBackgroundRebuild,
+  MIN_TOP_EARNER_SERIAL,
 };
