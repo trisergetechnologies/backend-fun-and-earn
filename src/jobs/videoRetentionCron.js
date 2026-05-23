@@ -11,7 +11,7 @@ const CRON_NAME = 'VIDEO_RETENTION_CRON';
 console.log(`[${CRON_NAME}] loaded at ${new Date().toISOString()}`);
 
 cron.schedule(
-  '0 3 * * *',
+  '0 2 * * *',
   async () => {
     const runId = `${CRON_NAME}_${Date.now()}`;
     console.log(`[${CRON_NAME}] scheduled run`, { runId });
