@@ -36,6 +36,36 @@ function matchesSearch(row, search) {
   );
 }
 
+function enrichEligibleRow(row, poolType, rulesActive) {
+  const achievements = row.achievements || [];
+  const highestLevel = achievements.length
+    ? Math.max(...achievements.map((a) => a.level))
+    : 0;
+  const top =
+    achievements.find((a) => a.level === highestLevel) ||
+    achievements[achievements.length - 1];
+  const eligibleLevelLabels = (row.eligibleLevels || [])
+    .map((l) => `L${l}`)
+    .join(', ');
+
+  let minNewBuyersRequired = null;
+  if (rulesActive && row.eligibleLevels?.length) {
+    const mins = row.eligibleLevels
+      .map((l) => getMinNewUsers(poolType, l))
+      .filter((m) => m != null);
+    if (mins.length) minNewBuyersRequired = Math.max(...mins);
+  }
+
+  return {
+    ...row,
+    highestLevel,
+    achievementCount: achievements.length,
+    topAchievementTitle: top?.title || '',
+    eligibleLevelLabels,
+    minNewBuyersRequired,
+  };
+}
+
 async function buildRow(group, poolType, sinceDate, rulesActive, buyerCountCache) {
   const userId = group._id;
   const achievements = (group.achievements || []).sort((a, b) => a.level - b.level);
@@ -114,7 +144,7 @@ async function buildFullEligibleList(poolType) {
 
   const data = partial.map((row) => {
     const u = userMap.get(row.userId);
-    return {
+    const base = {
       userId: row.userId,
       name: u?.name || 'Member',
       serialNumber: u?.serialNumber ?? null,
@@ -124,6 +154,7 @@ async function buildFullEligibleList(poolType) {
       eligibleLevels: row.eligibleLevels,
       newBuyersSinceLastPayout: row.newBuyersSinceLastPayout,
     };
+    return enrichEligibleRow(base, poolType, rulesActive);
   });
 
   const meta = {

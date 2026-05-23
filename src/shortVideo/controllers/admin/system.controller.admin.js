@@ -23,56 +23,106 @@ const {
 
 
 
+function mapSystemLogRow(doc) {
+  const u = doc.fromUserDoc;
+  return {
+    _id: doc._id,
+    amount: doc.amount,
+    type: doc.type,
+    source: doc.source,
+    context: doc.context || '',
+    status: doc.status,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    fromUser: u
+      ? {
+          id: String(u._id),
+          name: u.name || '',
+          serialNumber: u.serialNumber ?? null,
+        }
+      : null,
+  };
+}
+
 exports.getSystemEarningLogs = async (req, res) => {
   try {
-    const { limit = 20, page = 1, search } = req.query;
-    const filter = {};
-    if (search && typeof search === 'string' && search.trim()) {
-      const term = search.trim();
-      filter.$or = [
-        { source: { $regex: term, $options: 'i' } },
-        { context: { $regex: term, $options: 'i' } },
-        { status: { $regex: term, $options: 'i' } }
-      ];
-    }
-
+    const { limit = 20, page = 1, search, type, source } = req.query;
     const limitNum = Math.min(100, Math.max(1, Number(limit)));
     const pageNum = Math.max(1, Number(page));
     const skip = (pageNum - 1) * limitNum;
 
-    const [logs, total] = await Promise.all([
-      SystemEarningLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
-      SystemEarningLog.countDocuments(filter)
-    ]);
-
-    if (!logs || logs.length === 0) {
-      return res.status(200).json({
-        success: false,
-        message: 'No earning logs found',
-        data: []
-      });
+    const match = {};
+    if (type && type !== 'all' && ['inflow', 'outflow'].includes(type)) {
+      match.type = type;
     }
+    if (source && source !== 'all' && typeof source === 'string') {
+      match.source = source;
+    }
+
+    const pipeline = [
+      { $match: match },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'fromUser',
+          foreignField: '_id',
+          as: 'fromUserDoc',
+        },
+      },
+      { $unwind: { path: '$fromUserDoc', preserveNullAndEmptyArrays: true } },
+    ];
+
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      const serialNum = Number(term);
+      const or = [
+        { source: { $regex: term, $options: 'i' } },
+        { context: { $regex: term, $options: 'i' } },
+        { status: { $regex: term, $options: 'i' } },
+        { 'fromUserDoc.name': { $regex: term, $options: 'i' } },
+      ];
+      if (!Number.isNaN(serialNum)) {
+        or.push({ 'fromUserDoc.serialNumber': serialNum });
+      }
+      pipeline.push({ $match: { $or: or } });
+    }
+
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          rows: [{ $skip: skip }, { $limit: limitNum }],
+          total: [{ $count: 'count' }],
+        },
+      }
+    );
+
+    const [facet] = await SystemEarningLog.aggregate(pipeline);
+    const rows = facet?.rows ?? [];
+    const total = facet?.total?.[0]?.count ?? 0;
+    const logs = rows.map(mapSystemLogRow);
 
     return res.status(200).json({
       success: true,
-      message: 'System earning logs fetched successfully',
+      message: logs.length
+        ? 'System earning logs fetched successfully'
+        : 'No earning logs found',
       data: {
         logs,
         pagination: {
           total,
           page: pageNum,
           limit: limitNum,
-          totalPages: Math.ceil(total / limitNum) || 1
-        }
-      }
+          totalPages: Math.ceil(total / limitNum) || 1,
+        },
+      },
     });
-
   } catch (err) {
     console.error('Get System Earning Logs Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
-      data: null
+      data: null,
     });
   }
 };
