@@ -21,6 +21,11 @@ const {
   getMinNewUsers,
 } = require('../../helpers/rewardPayoutConfig');
 const { getSystemEarningLogsPage } = require('../../services/systemEarningLogs.service');
+const {
+  resolveUser,
+  getUser360Summary,
+  getUser360Logs,
+} = require('../../services/user360.service');
 
 exports.getSystemEarningLogs = async (req, res) => {
   try {
@@ -527,164 +532,98 @@ exports.payoutMonthlyRewards = async (req, res) => {
 
 exports.getCompleteInfo = async (req, res) => {
   try {
-    // Accept identifier from query, params or body
-    const { email: qEmail, userId: qUserId } = req.query || {};
-    const { email: bEmail, userId: bUserId } = req.body || {};
+    const { email: qEmail, userId: qUserId, serialNumber: qSerial } = req.query || {};
+    const { email: bEmail, userId: bUserId, serialNumber: bSerial } = req.body || {};
     const { id: pId } = req.params || {};
 
-    const email = qEmail || bEmail;
-    const userId = qUserId || bUserId || pId;
+    const { user, error } = await resolveUser({
+      email: qEmail || bEmail,
+      userId: qUserId || bUserId || pId,
+      serialNumber: qSerial ?? bSerial,
+    });
 
-    if (!email && !userId) {
+    if (error) {
       return res.status(200).json({
         success: false,
-        message: 'Provide email or userId to fetch user details',
-        data: null
+        message: error,
+        data: null,
       });
     }
 
-    // Find user (prefer userId)
-    let user;
-    if (userId) {
-      if (!mongoose.Types.ObjectId.isValid(userId)) {
-        return res.status(200).json({
-          success: false,
-          message: 'Invalid userId',
-          data: null
-        });
-      }
-      user = await User.findById(userId).populate('package').lean();
-    } else {
-      user = await User.findOne({ email }).populate('package').lean();
-    }
-
-    if (!user) {
-      return res.status(200).json({
-        success: false,
-        message: 'User not found',
-        data: null
-      });
-    }
-
-    // Remove sensitive fields
-    delete user.password;
-    if (user.token) delete user.token;
-
-    // Limits for lists (adjust if you want)
-    const RECENT_ORDERS_LIMIT = 50;
-    const RECENT_TX_LIMIT = 100;
-    const RECENT_EARNING_LOGS_LIMIT = 100;
-    const RECENT_COUPONS_LIMIT = 50;
-    const RECENT_VIDEOS_LIMIT = 50;
-    const RECENT_REFERRALS_LIMIT = 200;
-
-    // Fetch related resources in parallel
-    const [
-      achievements,
-      orders,
-      walletTxs,
-      earningLogs,
-      coupons,
-      videos,
-      referrals
-    ] = await Promise.all([
-      // all achievements (multiple docs allowed now)
-      Achievement.find({ userId: user._id }).sort({ level: 1 }).lean(),
-
-      // recent orders placed by user
-      Order.find({ buyerId: user._id }).sort({ createdAt: -1 }).limit(RECENT_ORDERS_LIMIT).lean(),
-
-      // recent wallet transactions
-      WalletTransaction.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_TX_LIMIT).lean(),
-
-      // earning logs where this user received (EarningLog.userId)
-      EarningLog.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_EARNING_LOGS_LIMIT).populate({path: 'fromUser',select: 'name email serialNumber'}).lean(),
-
-      // coupons earned by user
-      Coupon.find({ earnedBy: user._id }).sort({ createdAt: -1 }).limit(RECENT_COUPONS_LIMIT).lean(),
-
-      // videos uploaded by user (short video app)
-      Video.find({ userId: user._id }).sort({ createdAt: -1 }).limit(RECENT_VIDEOS_LIMIT).lean(),
-
-      // immediate referrals (direct downline)
-      User.find({ referredBy: user.referralCode })
-        .select('_id name email phone package serialNumber createdAt')
-        .limit(RECENT_REFERRALS_LIMIT)
-        .lean()
-    ]);
-
-    // Wallet transaction summary (sums by type)
-    const txSummary = walletTxs.reduce((acc, tx) => {
-      const { type, amount = 0, status } = tx;
-      if (status !== 'success') return acc;
-      acc.totalTransactions += 1;
-      acc.totals[type] = (acc.totals[type] || 0) + Number(amount || 0);
-      acc.grandTotal = round2((acc.grandTotal || 0) + Number(amount || 0));
-      return acc;
-    }, { totalTransactions: 0, totals: {}, grandTotal: 0 });
-
-    // earningLog summary
-    const earnSummary = earningLogs.reduce((acc, l) => {
-      const amt = Number(l.amount || 0);
-      acc.totalEarningLogs = (acc.totalEarningLogs || 0) + 1;
-      acc.totalEarned = round2((acc.totalEarned || 0) + amt);
-      return acc;
-    }, { totalEarningLogs: 0, totalEarned: 0 });
-
-    // Orders summary
-    const orderSummary = orders.reduce((acc, o) => {
-      acc.count = (acc.count || 0) + 1;
-      acc.totalOrderValue = round2((acc.totalOrderValue || 0) + Number(o.totalAmount || 0));
-      acc.totalPaid = round2((acc.totalPaid || 0) + Number(o.finalAmountPaid || 0));
-      return acc;
-    }, { count: 0, totalOrderValue: 0, totalPaid: 0 });
-
-    // Prepare response shape (lots of data)
-    const data = {
-      user, // includes populated package
-      wallets: user.wallets || {},
-      shortVideoProfile: user.shortVideoProfile || {},
-      eCartProfile: user.eCartProfile || {},
-      serialNumber: user.serialNumber || null,
-      referralCode: user.referralCode || null,
-      referredBy: user.referredBy || null,
-
-      achievements: achievements.map(a => ({
-        _id: a._id,
-        level: a.level,
-        title: a.title,
-        achievedAt: a.achievedAt || a.createdAt
-      })),
-
-      // recent items (full documents)
-      recentOrders: orders,
-      orderSummary,
-
-      recentWalletTransactions: walletTxs,
-      walletTransactionSummary: txSummary,
-
-      recentEarningLogs: earningLogs,
-      earningLogSummary: earnSummary,
-
-      recentCoupons: coupons,
-      recentVideos: videos,
-
-      immediateReferrals: referrals,
-      referralCount: referrals.length
-    };
+    const data = await getUser360Summary(user);
 
     return res.status(200).json({
       success: true,
       message: 'Complete user info fetched',
-      data
+      data,
     });
-
   } catch (err) {
     console.error('getCompleteInfo Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
-      data: null
+      data: null,
+    });
+  }
+};
+
+exports.getCompleteInfoLogs = async (req, res) => {
+  try {
+    const {
+      userId: qUserId,
+      email: qEmail,
+      serialNumber: qSerial,
+      logType,
+      page,
+      limit,
+    } = req.query || {};
+
+    let userId = qUserId;
+
+    if (!userId && (qEmail || qSerial !== undefined)) {
+      const { user, error } = await resolveUser({
+        email: qEmail,
+        serialNumber: qSerial,
+      });
+      if (error) {
+        return res.status(200).json({
+          success: false,
+          message: error,
+          data: null,
+        });
+      }
+      userId = String(user._id);
+    }
+
+    if (!userId || !logType) {
+      return res.status(200).json({
+        success: false,
+        message: 'Provide userId (or email/serialNumber) and logType',
+        data: null,
+      });
+    }
+
+    const { error, data } = await getUser360Logs(userId, logType, { page, limit });
+
+    if (error) {
+      return res.status(200).json({
+        success: false,
+        message: error,
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'User logs fetched',
+      data,
+    });
+  } catch (err) {
+    console.error('getCompleteInfoLogs Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+      data: null,
     });
   }
 };
