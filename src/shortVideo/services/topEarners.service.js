@@ -3,9 +3,7 @@
 const EarningLog = require('../models/EarningLog');
 const UserEarningLeaderboard = require('../models/UserEarningLeaderboard');
 const User = require('../../models/User');
-
-/** Serial numbers 1–22 are excluded from the public top earners list. */
-const MIN_TOP_EARNER_SERIAL = 23;
+const { MIN_PUBLIC_REWARD_SERIAL: MIN_TOP_EARNER_SERIAL } = require('../helpers/rewardListConfig');
 
 let syncInProgress = null;
 

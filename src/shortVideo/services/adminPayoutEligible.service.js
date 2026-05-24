@@ -12,6 +12,7 @@ const {
 } = require('../helpers/rewardPayoutConfig');
 const { countDistinctNewDownlineBuyersSince } = require('../helpers/rewardPayoutEligibility');
 const { computeEligibleLevels } = require('./rewardsPayoutEligible.service');
+const { isPublicRewardListSerial } = require('../helpers/rewardListConfig');
 
 const ADMIN_MAX_ACHIEVERS = 800;
 const PARALLEL_BATCH = 25;
@@ -142,20 +143,23 @@ async function buildFullEligibleList(poolType) {
     .lean();
   const userMap = new Map(users.map((u) => [String(u._id), u]));
 
-  const data = partial.map((row) => {
-    const u = userMap.get(row.userId);
-    const base = {
-      userId: row.userId,
-      name: u?.name || 'Member',
-      serialNumber: u?.serialNumber ?? null,
-      referralCode: u?.referralCode || '',
-      packageName: u?.package?.name || null,
-      achievements: row.achievements,
-      eligibleLevels: row.eligibleLevels,
-      newBuyersSinceLastPayout: row.newBuyersSinceLastPayout,
-    };
-    return enrichEligibleRow(base, poolType, rulesActive);
-  });
+  const data = partial
+    .map((row) => {
+      const u = userMap.get(row.userId);
+      if (!u || !isPublicRewardListSerial(u.serialNumber)) return null;
+      const base = {
+        userId: row.userId,
+        name: u.name || 'Member',
+        serialNumber: u.serialNumber ?? null,
+        referralCode: u.referralCode || '',
+        packageName: u.package?.name || null,
+        achievements: row.achievements,
+        eligibleLevels: row.eligibleLevels,
+        newBuyersSinceLastPayout: row.newBuyersSinceLastPayout,
+      };
+      return enrichEligibleRow(base, poolType, rulesActive);
+    })
+    .filter(Boolean);
 
   const meta = {
     poolType,

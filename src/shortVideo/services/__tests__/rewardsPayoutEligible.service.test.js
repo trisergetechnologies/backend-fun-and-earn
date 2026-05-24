@@ -38,7 +38,9 @@ const { countDistinctNewDownlineBuyersSince } = require('../../helpers/rewardPay
 const {
   computeEligibleLevels,
   getPayoutEligibleUsers,
+  buildPayoutReadyRow,
 } = require('../rewardsPayoutEligible.service');
+const { MIN_PUBLIC_REWARD_SERIAL } = require('../../helpers/rewardListConfig');
 
 describe('rewardsPayoutEligible.service', () => {
   beforeEach(() => {
@@ -109,6 +111,83 @@ describe('rewardsPayoutEligible.service', () => {
       ]);
       expect(result.users[0].newBuyersSinceLastPayout).toBe(4);
       expect(result.pagination.hasMore).toBe(false);
+    });
+
+    it('excludes users with serial below public minimum', async () => {
+      User.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          populate: jest.fn().mockReturnValue({
+            lean: async () => ({
+              _id: userId,
+              name: 'Early Serial',
+              serialNumber: MIN_PUBLIC_REWARD_SERIAL - 1,
+              referralCode: 'RC10',
+              package: null,
+            }),
+          }),
+        }),
+      });
+
+      const result = await getPayoutEligibleUsers({
+        poolType: 'weekly',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.users).toHaveLength(0);
+    });
+  });
+
+  describe('buildPayoutReadyRow', () => {
+    const userId = '507f1f77bcf86cd799439011';
+    const group = {
+      _id: userId,
+      achievements: [
+        { level: 1, title: 'L1' },
+        { level: 2, title: 'L2' },
+      ],
+    };
+
+    beforeEach(() => {
+      countDistinctNewDownlineBuyersSince.mockResolvedValue(4);
+    });
+
+    it('returns only payout-eligible achievement levels', async () => {
+      User.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          populate: jest.fn().mockReturnValue({
+            lean: async () => ({
+              _id: userId,
+              name: 'Member',
+              serialNumber: 30,
+              referralCode: 'RC30',
+              package: null,
+            }),
+          }),
+        }),
+      });
+
+      const row = await buildPayoutReadyRow(group, 'weekly', new Date(), true);
+      expect(row.achievements).toEqual([{ level: 1, title: 'L1' }, { level: 2, title: 'L2' }]);
+    });
+
+    it('returns null when serial is below minimum', async () => {
+      User.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          populate: jest.fn().mockReturnValue({
+            lean: async () => ({
+              _id: userId,
+              name: 'Member',
+              serialNumber: 5,
+              referralCode: 'RC5',
+              package: null,
+            }),
+          }),
+        }),
+      });
+
+      const row = await buildPayoutReadyRow(group, 'weekly', new Date(), true);
+      expect(row).toBeNull();
     });
   });
 });

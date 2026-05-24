@@ -11,6 +11,7 @@ const {
   MONTHLY_MIN_NEW_USERS,
 } = require('../helpers/rewardPayoutConfig');
 const { countDistinctNewDownlineBuyersSince } = require('../helpers/rewardPayoutEligibility');
+const { isPublicRewardListSerial } = require('../helpers/rewardListConfig');
 
 const MAX_SCAN_USERS = 120;
 const PARALLEL_BATCH = 15;
@@ -61,17 +62,21 @@ async function buildPayoutReadyRow(group, poolType, sinceDate, rulesActive) {
     .lean();
 
   if (!user) return null;
+  if (!isPublicRewardListSerial(user.serialNumber)) return null;
 
+  const eligibleSet = new Set(eligibleLevels);
   return {
     userId: String(userId),
     name: user.name || 'Member',
     serialNumber: user.serialNumber ?? null,
     referralCode: user.referralCode || '',
     packageName: user.package?.name || null,
-    achievements: achievements.map((a) => ({
-      level: a.level,
-      title: a.title,
-    })),
+    achievements: achievements
+      .filter((a) => eligibleSet.has(a.level))
+      .map((a) => ({
+        level: a.level,
+        title: a.title,
+      })),
     newBuyersSinceLastPayout: newBuyers,
     isEligible: true,
   };
