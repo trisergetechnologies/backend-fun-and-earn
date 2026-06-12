@@ -39,7 +39,7 @@ Run during a low-traffic window on large collections. MongoDB builds indexes in 
 | Product | category/seller/catalog compounds | eCart browse/search |
 | Coupon | `{ earnedBy, createdAt }`, redeem helper | wallet/profile |
 | Otp | `{ email }`, `{ email, otp }` | auth / reset |
-| Achievement / MonthlyAchievement | `{ level }` | payout jobs |
+| Achievement / MonthlyAchievement | `{ level }` | weekly/monthly payout (`Achievement.find({ level })`) |
 | SystemEarningLog | `{ createdAt }` | admin logs list |
 | Package | `{ isActive, price }` | package catalog |
 | User | watchTime sort, partial shortVideoWallet | admin credit / payout sweep |

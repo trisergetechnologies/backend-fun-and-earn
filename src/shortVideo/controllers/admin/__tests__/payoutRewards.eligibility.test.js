@@ -136,7 +136,7 @@ describe('payoutRewards eligibility gate', () => {
       expect(wallet.lastWeeklyPayoutAt).toBeInstanceOf(Date);
     });
 
-    it('skips level 1 achiever when ineligible and returns share to totalBalance', async () => {
+    it('returns full level bucket when all achievers are ineligible', async () => {
       const userId = '507f1f77bcf86cd799439002';
       Achievement.find = mockAchievementFind({
         1: [makeAchiever(userId)],
@@ -151,7 +151,7 @@ describe('payoutRewards eligibility gate', () => {
         expect.objectContaining({
           type: 'inflow',
           source: 'weeklyPayout',
-          context: expect.stringContaining('need 1 new downline buyers'),
+          context: 'No eligible achievers at level 1, funds returned',
         })
       );
     });
@@ -202,7 +202,7 @@ describe('payoutRewards eligibility gate', () => {
       expect(User.bulkWrite).toHaveBeenCalled();
     });
 
-    it('pays only eligible user when two level 1 achievers', async () => {
+    it('divides level bucket only among eligible achievers', async () => {
       const eligibleId = '507f1f77bcf86cd799439005';
       const ineligibleId = '507f1f77bcf86cd799439006';
       Achievement.find = mockAchievementFind({
@@ -217,7 +217,8 @@ describe('payoutRewards eligibility gate', () => {
       expect(User.bulkWrite).toHaveBeenCalledTimes(1);
       const bulkOps = User.bulkWrite.mock.calls[0][0];
       expect(bulkOps[0].updateOne.filter._id).toBe(eligibleId);
-      expect(wallet.totalBalance).toBe(95);
+      expect(bulkOps[0].updateOne.update.$inc['wallets.shortVideoWallet']).toBe(10);
+      expect(wallet.totalBalance).toBe(90);
     });
 
     it('rejects payout when atomic pool claim fails (concurrent request)', async () => {
@@ -234,7 +235,7 @@ describe('payoutRewards eligibility gate', () => {
       );
     });
 
-    it('logs totalPaid from actual credits when achiever is skipped', async () => {
+    it('logs totalPaid as full level bucket when one of two achievers is eligible', async () => {
       const eligibleId = '507f1f77bcf86cd799439010';
       const ineligibleId = '507f1f77bcf86cd799439011';
       Achievement.find = mockAchievementFind({
@@ -247,7 +248,7 @@ describe('payoutRewards eligibility gate', () => {
       await payoutWeeklyRewards(req, res);
 
       const response = res.json.mock.calls[0][0];
-      expect(response.data.totalPaid).toBe(5);
+      expect(response.data.totalPaid).toBe(10);
     });
   });
 
@@ -273,7 +274,7 @@ describe('payoutRewards eligibility gate', () => {
       expect(wallet.lastMonthlyPayoutAt).toBeInstanceOf(Date);
     });
 
-    it('skips level 2 when ineligible', async () => {
+    it('returns full level bucket when monthly achiever is ineligible', async () => {
       const userId = '507f1f77bcf86cd799439008';
       MonthlyAchievement.find = mockAchievementFind({
         2: [{ level: 2, title: 'Development Associate', userId: { _id: userId } }],
@@ -293,7 +294,7 @@ describe('payoutRewards eligibility gate', () => {
       expect(User.bulkWrite).not.toHaveBeenCalled();
       expect(SystemEarningLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: expect.stringContaining('need 6 new downline buyers'),
+          context: 'No eligible achievers at level 2, funds returned',
         })
       );
     });

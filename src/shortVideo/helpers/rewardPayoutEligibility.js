@@ -69,6 +69,7 @@ async function countDistinctNewDownlineBuyersSince(userId, sinceDate) {
 
 /**
  * Whether an achiever at a given pool type + achievement level may receive payout share.
+ * Payout divides each level bucket by eligible achievers only (see docs/REWARD_PAYOUT.md).
  */
 async function isEligibleForAchievementPayout(
   userId,

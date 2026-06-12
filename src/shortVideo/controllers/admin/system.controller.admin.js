@@ -134,6 +134,46 @@ function round2(v) {
   return Math.round((Number(v || 0) + Number.EPSILON) * 100) / 100;
 }
 
+async function collectPayableAchievers(
+  achievers,
+  poolType,
+  level,
+  sinceDate,
+  eligibilityCache
+) {
+  const payable = [];
+
+  for (const ach of achievers) {
+    const usr = ach.userId;
+    if (!usr || !usr._id) continue;
+
+    if (
+      !isEligibilityCheckSkipped() &&
+      getMinNewUsers(poolType, level) != null
+    ) {
+      const eligible = await isEligibleForAchievementPayout(
+        usr._id,
+        poolType,
+        level,
+        sinceDate,
+        eligibilityCache
+      );
+      if (!eligible) continue;
+    }
+
+    payable.push(ach);
+  }
+
+  return payable;
+}
+
+/**
+ * Distribute weekly reward pool among achievers.
+ * - Pool source: SystemWallet.weeklyPool (atomic claim before pay)
+ * - Split equally among 10 levels (1–10)
+ * - Each level’s share is divided equally among eligible achievers at that level
+ * - Unused or remainder funds return to SystemWallet.totalBalance
+ */
 exports.payoutWeeklyRewards = async (req, res) => {
   try {
     const admin = req.user;
@@ -188,9 +228,31 @@ exports.payoutWeeklyRewards = async (req, res) => {
           continue;
         }
 
-        const count = achievers.length;
-        const share = round2(perLevel / count);
-        const sumPaidForLevel = round2(share * count);
+        const payable = await collectPayableAchievers(
+          achievers,
+          'weekly',
+          level,
+          wallet.lastWeeklyPayoutAt,
+          eligibilityCache
+        );
+
+        if (payable.length === 0) {
+          wallet.totalBalance = round2((wallet.totalBalance || 0) + perLevel);
+          totalReturned = round2(totalReturned + perLevel);
+
+          await SystemEarningLog.create({
+            amount: perLevel,
+            type: 'inflow',
+            source: 'weeklyPayout',
+            context: `No eligible achievers at level ${level}, funds returned`,
+            status: 'success'
+          });
+
+          continue;
+        }
+
+        const share = round2(perLevel / payable.length);
+        const sumPaidForLevel = round2(share * payable.length);
         const remainder = round2(perLevel - sumPaidForLevel);
 
         // If there's a rounding remainder, return to system
@@ -207,55 +269,12 @@ exports.payoutWeeklyRewards = async (req, res) => {
           });
         }
 
-        // Bulk update user wallets
         const bulkUserOps = [];
         const txDocs = [];
         let levelPaid = 0;
 
-        for (const ach of achievers) {
+        for (const ach of payable) {
           const usr = ach.userId;
-          if (!usr || !usr._id) {
-            // If user missing, treat as not present -> return their share to system
-            wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
-            totalReturned = round2(totalReturned + share);
-            await SystemEarningLog.create({
-              amount: share,
-              type: 'inflow',
-              source: 'weeklyPayout',
-              context: `User missing for achievement level ${level}, returned share`,
-              status: 'success'
-            });
-            continue;
-          }
-
-          if (
-            !isEligibilityCheckSkipped() &&
-            getMinNewUsers('weekly', level) != null
-          ) {
-            const eligible = await isEligibleForAchievementPayout(
-              usr._id,
-              'weekly',
-              level,
-              wallet.lastWeeklyPayoutAt,
-              eligibilityCache
-            );
-            if (!eligible) {
-              const minRequired = getMinNewUsers('weekly', level);
-              wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
-              totalReturned = round2(totalReturned + share);
-              await SystemEarningLog.create({
-                amount: share,
-                type: 'inflow',
-                source: 'weeklyPayout',
-                context:
-                  minRequired != null
-                    ? `Level ${level} skipped: need ${minRequired} new downline buyers since last weekly payout`
-                    : `Level ${level} skipped: eligibility not met since last weekly payout`,
-                status: 'success',
-              });
-              continue;
-            }
-          }
 
           bulkUserOps.push({
             updateOne: {
@@ -263,17 +282,6 @@ exports.payoutWeeklyRewards = async (req, res) => {
               update: { $inc: { 'wallets.shortVideoWallet': share } }
             }
           });
-
-          // txDocs.push({
-          //   userId: usr._id,
-          //   type: 'earn',
-          //   source: 'system',
-          //   fromWallet: 'shortVideoWallet',
-          //   amount: share,
-          //   status: 'success',
-          //   triggeredBy: 'system',
-          //   notes: `Weekly reward: ${ach.title}`
-          // });
 
           txDocs.push({
             userId: usr._id,
@@ -336,9 +344,9 @@ exports.payoutWeeklyRewards = async (req, res) => {
 
 /**
  * Distribute monthly reward pool among achievers.
- * - Pool source: SystemWallet.monthlyPool
+ * - Pool source: SystemWallet.monthlyPool (atomic claim before pay)
  * - Split equally among 10 levels (1–10)
- * - Each level’s share is divided equally among achievers at that level
+ * - Each level’s share is divided equally among eligible achievers at that level
  * - Unused or remainder funds return to SystemWallet.totalBalance
  */
 exports.payoutMonthlyRewards = async (req, res) => {
@@ -400,9 +408,31 @@ exports.payoutMonthlyRewards = async (req, res) => {
           continue;
         }
 
-        const count = achievers.length;
-        const share = round2(perLevel / count);
-        const sumPaidForLevel = round2(share * count);
+        const payable = await collectPayableAchievers(
+          achievers,
+          'monthly',
+          level,
+          wallet.lastMonthlyPayoutAt,
+          eligibilityCache
+        );
+
+        if (payable.length === 0) {
+          wallet.totalBalance = round2((wallet.totalBalance || 0) + perLevel);
+          totalReturned = round2(totalReturned + perLevel);
+
+          await SystemEarningLog.create({
+            amount: perLevel,
+            type: "inflow",
+            source: "monthlyPayout",
+            context: `No eligible achievers at level ${level}, funds returned`,
+            status: "success"
+          });
+
+          continue;
+        }
+
+        const share = round2(perLevel / payable.length);
+        const sumPaidForLevel = round2(share * payable.length);
         const remainder = round2(perLevel - sumPaidForLevel);
 
         // Return any rounding remainder
@@ -423,52 +453,9 @@ exports.payoutMonthlyRewards = async (req, res) => {
         const txDocs = [];
         let levelPaid = 0;
 
-        for (const ach of achievers) {
+        for (const ach of payable) {
           const usr = ach.userId;
-          if (!usr || !usr._id) {
-            // User missing — return their share to system
-            wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
-            totalReturned = round2(totalReturned + share);
-            await SystemEarningLog.create({
-              amount: share,
-              type: "inflow",
-              source: "monthlyPayout",
-              context: `User missing for level ${level}, returned share`,
-              status: "success"
-            });
-            continue;
-          }
 
-          if (
-            !isEligibilityCheckSkipped() &&
-            getMinNewUsers('monthly', level) != null
-          ) {
-            const eligible = await isEligibleForAchievementPayout(
-              usr._id,
-              'monthly',
-              level,
-              wallet.lastMonthlyPayoutAt,
-              eligibilityCache
-            );
-            if (!eligible) {
-              const minRequired = getMinNewUsers('monthly', level);
-              wallet.totalBalance = round2((wallet.totalBalance || 0) + share);
-              totalReturned = round2(totalReturned + share);
-              await SystemEarningLog.create({
-                amount: share,
-                type: "inflow",
-                source: "monthlyPayout",
-                context:
-                  minRequired != null
-                    ? `Level ${level} skipped: need ${minRequired} new downline buyers since last monthly payout`
-                    : `Level ${level} skipped: eligibility not met since last monthly payout`,
-                status: "success",
-              });
-              continue;
-            }
-          }
-
-          // Add user wallet increment
           bulkUserOps.push({
             updateOne: {
               filter: { _id: usr._id },
@@ -476,7 +463,6 @@ exports.payoutMonthlyRewards = async (req, res) => {
             }
           });
 
-          // Log earning
           txDocs.push({
             userId: usr._id,
             amount: share,
