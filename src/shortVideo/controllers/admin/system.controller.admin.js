@@ -142,16 +142,24 @@ exports.payoutWeeklyRewards = async (req, res) => {
     }
 
     // Ensure a system wallet doc exists
-    let wallet = await SystemWallet.findOne();
-    if (!wallet) {
-      wallet = await new SystemWallet().save();
+    let walletDoc = await SystemWallet.findOne();
+    if (!walletDoc) {
+      walletDoc = await new SystemWallet().save();
     }
 
-    if (!wallet.weeklyPool || wallet.weeklyPool <= 0) {
+    // Atomic claim — only one concurrent payout can win
+    const wallet = await SystemWallet.findOneAndUpdate(
+      { _id: walletDoc._id, weeklyPool: { $gt: 0 } },
+      { $set: { weeklyPool: 0 } },
+      { new: false }
+    );
+
+    if (!wallet) {
       return res.status(200).json({ success: false, message: 'No funds in weekly pool', data: null });
     }
 
     const poolAmount = round2(wallet.weeklyPool);
+    wallet.weeklyPool = 0;
     const perLevel = round2(poolAmount / 10); // equal split into 10 buckets
 
     let totalPaid = 0;
@@ -202,6 +210,7 @@ exports.payoutWeeklyRewards = async (req, res) => {
         // Bulk update user wallets
         const bulkUserOps = [];
         const txDocs = [];
+        let levelPaid = 0;
 
         for (const ach of achievers) {
           const usr = ach.userId;
@@ -276,6 +285,7 @@ exports.payoutWeeklyRewards = async (req, res) => {
             notes: `Weekly reward: ${ach.title}`,
             status: 'success'
           });
+          levelPaid = round2(levelPaid + share);
         }
 
         // Execute bulk user updates and wallet transactions
@@ -287,7 +297,7 @@ exports.payoutWeeklyRewards = async (req, res) => {
           await EarningLog.insertMany(txDocs);
         }
 
-        totalPaid = round2(totalPaid + sumPaidForLevel);
+        totalPaid = round2(totalPaid + levelPaid);
 
       } catch (lvlErr) {
         console.error(`Error processing level ${level} in weekly payout:`, lvlErr);
@@ -295,8 +305,6 @@ exports.payoutWeeklyRewards = async (req, res) => {
       }
     } // end for levels
 
-    // Zero out weeklyPool (payout consumed it)
-    wallet.weeklyPool = 0;
     wallet.lastWeeklyPayoutAt = new Date();
     await wallet.save();
 
@@ -344,10 +352,17 @@ exports.payoutMonthlyRewards = async (req, res) => {
     }
 
     // Ensure wallet exists
-    let wallet = await SystemWallet.findOne();
-    if (!wallet) wallet = await new SystemWallet().save();
+    let walletDoc = await SystemWallet.findOne();
+    if (!walletDoc) walletDoc = await new SystemWallet().save();
 
-    if (!wallet.monthlyPool || wallet.monthlyPool <= 0) {
+    // Atomic claim — only one concurrent payout can win
+    const wallet = await SystemWallet.findOneAndUpdate(
+      { _id: walletDoc._id, monthlyPool: { $gt: 0 } },
+      { $set: { monthlyPool: 0 } },
+      { new: false }
+    );
+
+    if (!wallet) {
       return res.status(200).json({
         success: false,
         message: "No funds in monthly reward pool",
@@ -356,6 +371,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
     }
 
     const poolAmount = round2(wallet.monthlyPool);
+    wallet.monthlyPool = 0;
     const perLevel = round2(poolAmount / 10);
 
     let totalPaid = 0;
@@ -405,6 +421,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
 
         const bulkUserOps = [];
         const txDocs = [];
+        let levelPaid = 0;
 
         for (const ach of achievers) {
           const usr = ach.userId;
@@ -470,6 +487,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
             notes: `Monthly reward: ${ach.title}`,
             status: "success"
           });
+          levelPaid = round2(levelPaid + share);
         }
 
         // Apply bulk updates
@@ -481,7 +499,7 @@ exports.payoutMonthlyRewards = async (req, res) => {
           await EarningLog.insertMany(txDocs);
         }
 
-        totalPaid = round2(totalPaid + sumPaidForLevel);
+        totalPaid = round2(totalPaid + levelPaid);
 
       } catch (levelErr) {
         console.error(`❌ Error processing monthly level ${level}:`, levelErr);
@@ -489,8 +507,6 @@ exports.payoutMonthlyRewards = async (req, res) => {
       }
     }
 
-    // Empty the monthly pool after payout
-    wallet.monthlyPool = 0;
     wallet.lastMonthlyPayoutAt = new Date();
     await wallet.save();
 

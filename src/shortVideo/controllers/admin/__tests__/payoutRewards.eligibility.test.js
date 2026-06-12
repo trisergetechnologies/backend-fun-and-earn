@@ -8,6 +8,7 @@ jest.mock('../../../../models/SystemWallet', () => {
     this.save = mockSave;
   });
   ctor.findOne = jest.fn();
+  ctor.findOneAndUpdate = jest.fn();
   return ctor;
 });
 
@@ -94,6 +95,12 @@ describe('payoutRewards eligibility gate', () => {
     };
 
     SystemWallet.findOne.mockResolvedValue(wallet);
+    SystemWallet.findOneAndUpdate.mockImplementation(async (filter) => {
+      const poolField = filter.weeklyPool != null ? 'weeklyPool' : 'monthlyPool';
+      const poolValue = wallet[poolField];
+      if (poolValue == null || poolValue <= 0) return null;
+      return wallet;
+    });
 
     req = { user: { _id: 'admin507f1f77bcf86cd799439099', role: 'admin' } };
     res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -212,6 +219,36 @@ describe('payoutRewards eligibility gate', () => {
       expect(bulkOps[0].updateOne.filter._id).toBe(eligibleId);
       expect(wallet.totalBalance).toBe(95);
     });
+
+    it('rejects payout when atomic pool claim fails (concurrent request)', async () => {
+      SystemWallet.findOneAndUpdate.mockResolvedValue(null);
+
+      await payoutWeeklyRewards(req, res);
+
+      expect(User.bulkWrite).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'No funds in weekly pool',
+        })
+      );
+    });
+
+    it('logs totalPaid from actual credits when achiever is skipped', async () => {
+      const eligibleId = '507f1f77bcf86cd799439010';
+      const ineligibleId = '507f1f77bcf86cd799439011';
+      Achievement.find = mockAchievementFind({
+        1: [makeAchiever(eligibleId), makeAchiever(ineligibleId)],
+      });
+      isEligibleForAchievementPayout.mockImplementation(async (uid) => {
+        return String(uid) === eligibleId;
+      });
+
+      await payoutWeeklyRewards(req, res);
+
+      const response = res.json.mock.calls[0][0];
+      expect(response.data.totalPaid).toBe(5);
+    });
   });
 
   describe('payoutMonthlyRewards', () => {
@@ -257,6 +294,20 @@ describe('payoutRewards eligibility gate', () => {
       expect(SystemEarningLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.stringContaining('need 6 new downline buyers'),
+        })
+      );
+    });
+
+    it('rejects payout when atomic monthly pool claim fails', async () => {
+      SystemWallet.findOneAndUpdate.mockResolvedValue(null);
+
+      await payoutMonthlyRewards(req, res);
+
+      expect(User.bulkWrite).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'No funds in monthly reward pool',
         })
       );
     });
