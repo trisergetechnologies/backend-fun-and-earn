@@ -27,7 +27,7 @@ const PaymentIntentSchema = new mongoose.Schema({
 
   gateway: {
     type: String,
-    enum: ['razorpay', 'orange_pg', 'walletOnly'],
+    enum: ['razorpay', 'orange_pg', 'ccavenue', 'walletOnly'],
     default: 'razorpay'
   },
 

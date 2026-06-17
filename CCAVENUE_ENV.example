@@ -1,0 +1,16 @@
+# Production (live)
+PAYMENT_GATEWAY=ccavenue
+BACKEND_URL=https://amp-api.mpdreams.in/api/v1
+CCAVENUE_ENV=live
+
+# CCAvenue credentials — M.A.R.S Settings > API Keys (LIVE section for production)
+CCAVENUE_MERCHANT_ID=
+CCAVENUE_ACCESS_CODE=
+CCAVENUE_WORKING_KEY=
+
+# Whitelist with CCAvenue (service@ccavenue.com):
+# https://amp-api.mpdreams.in/api/v1/public/ccavenue/callback
+# https://amp-api.mpdreams.in/api/v1/public/ccavenue/cancel
+# Payment host: https://secure.ccavenue.com/transaction/transaction.do?command=initiateTransaction
+
+FRONTEND_URL=dreammart://

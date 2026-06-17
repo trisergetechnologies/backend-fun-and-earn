@@ -13,6 +13,17 @@ const PDFDocument = require('pdfkit');
 const fs = require("fs");
 const path = require("path");
 const PaymentIntent = require('../../models/PaymentIntent');
+const {
+  normalizePaymentGateway,
+  isCcavenueGateway,
+  assertCcavenueConfig,
+  buildOrderParams,
+  buildPaymentPageUrl,
+  generateCcavenueOrderId,
+  getCallbackUrls,
+  CCAVENUE_ENV,
+  BACKEND_URL
+} = require('../../helpers/ccavenue.helper');
 require('dotenv').config();
 
 
@@ -196,7 +207,8 @@ function msFromNow(minutes) {
 
 exports.createOrderIntent = async (req, res) => {
   const user = req.user;
-  const { useWallet = false, deliverySlug, idempotencyKey } = req.body;
+  const { useWallet = false, deliverySlug, idempotencyKey, paymentGateway } = req.body;
+  const requestedGateway = normalizePaymentGateway(paymentGateway);
 
   if (!deliverySlug) {
     return res.status(200).json({ success: false, message: 'deliverySlug is required' });
@@ -217,16 +229,34 @@ exports.createOrderIntent = async (req, res) => {
       if (existing) {
         // find associated order if any
         const order = existing.referenceId ? await Order.findById(existing.referenceId) : null;
+
+        const baseData = {
+          paymentIntentId: existing._id,
+          orderId: order?._id || null,
+          publicOrderId: order?.publicOrderId || null,
+          amount: existing.amount,
+          expiresAt: existing.expiresAt,
+          gateway: existing.gateway || 'razorpay'
+        };
+
+        if (existing.gateway === 'ccavenue') {
+          return res.status(200).json({
+            success: true,
+            message: 'Existing intent found',
+            data: {
+              ...baseData,
+              paymentPageUrl: existing.meta?.ccavenue?.paymentPageUrl || null,
+              ccavenueOrderId: existing.meta?.ccavenue?.orderId || null
+            }
+          });
+        }
+
         return res.status(200).json({
           success: true,
           message: 'Existing intent found',
           data: {
-            paymentIntentId: existing._id,
-            razorpayOrderId: existing.razorpayOrderId,
-            orderId: order?._id || null,
-            publicOrderId: order?.publicOrderId || null,
-            amount: existing.amount,
-            expiresAt: existing.expiresAt
+            ...baseData,
+            razorpayOrderId: existing.razorpayOrderId
           }
         });
       }
@@ -334,21 +364,23 @@ exports.createOrderIntent = async (req, res) => {
       await product.save({ session });
     }
 
+    const activeGateway = remaining > 0 ? requestedGateway : 'walletOnly';
+
     // Step 7: Create Order and PaymentIntent record
-    // PaymentIntent created with status 'created' and will be updated with razorpayOrderId after commit
+    // PaymentIntent created with status 'created' and will be updated with gateway details after commit
     const orderDoc = new Order({
       buyerId: user._id,
       items: orderItems,
       deliveryAddress,
       usedWalletAmount,
       totalAmount: subtotal,
-      finalAmountPaid: remaining, // amount expected to be paid via Razorpay (0 if wallet covered)
+      finalAmountPaid: remaining, // amount expected to be paid via gateway (0 if wallet covered)
       totalGstAmount: cart.totalGstAmount || 0,
       deliveryCharge: cart?.deliveryCharge || 0,
       paymentStatus: remaining > 0 ? 'pending' : 'paid',
       status: 'placed',
       paymentInfo: {
-        gateway: remaining > 0 ? 'razorpay' : 'walletOnly',
+        gateway: activeGateway,
         paymentId: null
       }
     });
@@ -365,7 +397,8 @@ exports.createOrderIntent = async (req, res) => {
       currency: 'INR',
       status: remaining > 0 ? 'created' : 'captured', // if remaining 0, consider captured
       expiresAt: remaining > 0 ? expiresAt : new Date(),
-      idempotencyKey: idempotencyKey || null
+      idempotencyKey: idempotencyKey || null,
+      gateway: activeGateway
     });
 
     await paymentIntentDoc.save({ session });
@@ -379,8 +412,127 @@ exports.createOrderIntent = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // Step 9: If remaining > 0, create Razorpay order and update PaymentIntent (outside DB txn)
+    // Step 9: If remaining > 0, initialize payment gateway (outside DB txn)
     if (remaining > 0) {
+      if (isCcavenueGateway(requestedGateway)) {
+        try {
+          assertCcavenueConfig();
+
+          const ccavenueOrderId = generateCcavenueOrderId(paymentIntentDoc._id);
+          const billing = {
+            name: deliveryAddress.fullName || user.name || 'Customer',
+            address: deliveryAddress.street || 'NA',
+            city: deliveryAddress.city || 'NA',
+            state: deliveryAddress.state || 'NA',
+            zip: deliveryAddress.pincode || '000000',
+            country: 'India',
+            phone: deliveryAddress.phone || user.phone || '9999999999',
+            email: user.email || 'customer@dreammart.com'
+          };
+
+          const orderParams = buildOrderParams({
+            orderId: ccavenueOrderId,
+            amount: remaining,
+            currency: 'INR',
+            billing,
+            merchantParam1: orderDoc._id.toString(),
+            merchantParam2: paymentIntentDoc._id.toString()
+          });
+
+          const paymentPageUrl = buildPaymentPageUrl(orderParams);
+          const callbackUrls = getCallbackUrls();
+
+          console.log('[CCAvenue] create_order_intent', JSON.stringify({
+            paymentIntentId: paymentIntentDoc._id.toString(),
+            orderId: orderDoc._id.toString(),
+            ccavenueOrderId,
+            amount: remaining,
+            requestedGateway,
+            CCAVENUE_ENV,
+            BACKEND_URL,
+            redirect_url: callbackUrls.redirectUrl,
+            cancel_url: callbackUrls.cancelUrl,
+            paymentHost: paymentPageUrl.split('?')[0]
+          }));
+
+          await PaymentIntent.findByIdAndUpdate(paymentIntentDoc._id, {
+            gateway: 'ccavenue',
+            meta: {
+              ccavenue: {
+                orderId: ccavenueOrderId,
+                paymentPageUrl,
+                initiatedAt: new Date()
+              }
+            }
+          }, { new: true });
+
+          return res.status(200).json({
+            success: true,
+            message: 'Order intent created. Complete payment via CCAvenue.',
+            data: {
+              orderId: orderDoc._id,
+              publicOrderId: orderDoc.publicOrderId,
+              paymentIntentId: paymentIntentDoc._id,
+              paymentPageUrl,
+              ccavenueOrderId,
+              amount: remaining,
+              currency: 'INR',
+              gateway: 'ccavenue',
+              expiresAt
+            }
+          });
+        } catch (ccavenueErr) {
+          console.error('CCAvenue order creation failed:', ccavenueErr);
+
+          const compSession = await mongoose.startSession();
+          compSession.startTransaction();
+          try {
+            await PaymentIntent.findByIdAndUpdate(paymentIntentDoc._id, {
+              status: 'failed',
+              meta: { error: ccavenueErr.message }
+            }, { session: compSession });
+
+            for (const item of cart.items) {
+              await Product.findByIdAndUpdate(item.productId._id, { $inc: { stock: item.quantity } }, { session: compSession });
+            }
+
+            if (usedWalletAmount > 0) {
+              await User.findByIdAndUpdate(user._id, { $inc: { 'wallets.eCartWallet': usedWalletAmount } }, { session: compSession });
+
+              await WalletTransaction.create([{
+                userId: user._id,
+                type: 'earn',
+                source: 'system',
+                fromWallet: 'eCartWallet',
+                toWallet: null,
+                amount: usedWalletAmount,
+                status: 'success',
+                triggeredBy: 'system',
+                notes: 'Refund wallet due to CCAvenue order creation failure'
+              }], { session: compSession });
+            }
+
+            await Order.findByIdAndUpdate(orderDoc._id, {
+              paymentStatus: 'failed',
+              status: 'cancelled'
+            }, { session: compSession });
+
+            await compSession.commitTransaction();
+            compSession.endSession();
+          } catch (compErr) {
+            await compSession.abortTransaction();
+            compSession.endSession();
+            console.error('CCAvenue compensation rollback failed:', compErr.message);
+          }
+
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to initialize payment with CCAvenue. Wallet refunded and order cancelled.',
+            error: ccavenueErr.message
+          });
+        }
+      }
+
       try {
 
         const shortOrderId = orderDoc._id.toString().slice(-8); // last 8 chars only
@@ -397,6 +549,7 @@ exports.createOrderIntent = async (req, res) => {
         // update PaymentIntent with razorpayOrderId
         await PaymentIntent.findByIdAndUpdate(paymentIntentDoc._id, {
           razorpayOrderId: razorpayOrder.id,
+          gateway: 'razorpay',
           meta: { razorpayOrderPayload: razorpayOrder }
         }, { new: true });
 
@@ -412,6 +565,7 @@ exports.createOrderIntent = async (req, res) => {
             razorpayKeyId: RAZORPAY_KEY_ID,
             amount: remaining,
             currency: 'INR',
+            gateway: 'razorpay',
             callbackUrl,
             expiresAt
           }
