@@ -13,6 +13,7 @@ const {
   assertCcavenueConfig,
   getCallbackUrls,
   CCAVENUE_ENV,
+  CCAVENUE_WORKING_KEY,
   BACKEND_URL
 } = require('../../helpers/ccavenue.helper');
 
@@ -167,7 +168,7 @@ function isSuccessStatus(orderStatus) {
 async function processCcavenueResponse(encResp) {
   log('process_response_start', { encRespLength: encResp?.length || 0 });
 
-  const decrypted = decrypt(encResp);
+  const decrypted = decrypt(encResp, CCAVENUE_WORKING_KEY);
   const params = parseDecryptedResponse(decrypted);
 
   log('process_response_decrypted', {

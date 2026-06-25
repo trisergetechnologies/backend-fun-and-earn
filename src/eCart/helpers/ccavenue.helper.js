@@ -49,7 +49,10 @@ function encrypt(plainText, workingKey) {
   return Buffer.from(encrypted, 'binary').toString('hex');
 }
 
-function decrypt(encryptedHex, workingKey) {
+function decrypt(encryptedHex, workingKey = CCAVENUE_WORKING_KEY) {
+  if (!workingKey) {
+    throw new Error('CCAvenue working key is not configured');
+  }
   const secretKey = getSecretKey(workingKey);
   const encryptedText = Buffer.from(hextobin(encryptedHex), 'binary');
   const decipher = crypto.createDecipheriv('aes-128-cbc', secretKey, INIT_VECTOR);
