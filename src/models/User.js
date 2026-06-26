@@ -21,6 +21,15 @@ const BankDetailsSchema = new mongoose.Schema({
   upiId: String
 }, { _id: false });
 
+const SellerDetailsSchema = new mongoose.Schema({
+  gstin: String,
+  contactPersonName: String,
+  street: String,
+  city: String,
+  state: String,
+  pincode: String,
+}, { _id: false });
+
 // Main shared user schema across E-Cart and Short Video
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -61,6 +70,8 @@ const UserSchema = new mongoose.Schema({
     orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
     bankDetails: BankDetailsSchema // For UPI payouts
   },
+
+  sellerDetails: SellerDetailsSchema,
 
   serialNumber: {
     type: Number,

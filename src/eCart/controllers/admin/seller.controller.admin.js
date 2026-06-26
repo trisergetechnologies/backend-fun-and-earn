@@ -1,39 +1,91 @@
 const User = require("../../../models/User");
+const Product = require("../../models/Product");
 const mongoose = require('mongoose');
 const { hashPassword } = require("../../../utils/bcrypt");
+const { isValidGstin } = require("../../../utils/gstin");
+
+function parseSellerDetails(body) {
+  const raw = body.sellerDetails;
+  if (!raw) return body.gstin ? { gstin: body.gstin } : null;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw;
+}
+
+function validateSellerInput({ name, email, password, phone, sellerDetails }, isCreate) {
+  if (!name || !email) {
+    return 'Company name and email are required';
+  }
+  if (isCreate && !password) {
+    return 'Password is required';
+  }
+  if (!phone) {
+    return 'Phone is required';
+  }
+  const details = sellerDetails || {};
+  if (!details.gstin) {
+    return 'GSTIN is required';
+  }
+  if (!isValidGstin(details.gstin)) {
+    return 'Invalid GSTIN format';
+  }
+  return null;
+}
 
 exports.createSeller = async (req, res) => {
   try {
-    const admin = req.user;
+    const { name, email, phone, password } = req.body;
+    const sellerDetails = parseSellerDetails(req.body);
 
-    const { name, email, phone, password, gender } = req.body;
+    const validationError = validateSellerInput(
+      { name, email, password, phone, sellerDetails },
+      true
+    );
+    if (validationError) {
+      return res.status(200).json({
+        success: false,
+        message: validationError,
+        data: null,
+      });
+    }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { phone }] 
+    const existingUser = await User.findOne({
+      $or: [{ email }, { phone }],
     });
 
     if (existingUser) {
       return res.status(200).json({
         success: false,
         message: 'User with this email or phone already exists',
-        data: null
+        data: null,
       });
     }
+
     const hashedPassword = await hashPassword(password);
-    // Create new seller
     const newSeller = await User.create({
       name,
       email,
       phone,
-      gender,
+      gender: 'male',
       password: hashedPassword,
       role: 'seller',
       applications: ['eCart'],
-      isActive: true
+      isActive: true,
+      sellerDetails: {
+        gstin: sellerDetails.gstin.trim().toUpperCase(),
+        contactPersonName: sellerDetails.contactPersonName || '',
+        street: sellerDetails.street || '',
+        city: sellerDetails.city || '',
+        state: sellerDetails.state || '',
+        pincode: sellerDetails.pincode || '',
+      },
     });
 
-    // Remove sensitive data before sending response
     const sellerData = newSeller.toObject();
     delete sellerData.password;
     delete sellerData.token;
@@ -41,36 +93,43 @@ exports.createSeller = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Seller created successfully',
-      data: sellerData
+      data: sellerData,
     });
-
   } catch (err) {
     console.error('Create Seller Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
       data: null,
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
     });
   }
 };
 
-
-
-
 exports.getSellers = async (req, res) => {
   try {
-    const admin = req.user;
     const { id } = req.params;
+    const { page = 1, limit = 25, search, isActive, dropdown } = req.query;
 
+    if (dropdown === 'true') {
+      const sellers = await User.find(
+        { role: 'seller', isActive: true },
+        { password: 0, token: 0 }
+      ).sort({ name: 1 });
 
-    // Get single seller by ID
+      return res.status(200).json({
+        success: true,
+        message: 'Sellers fetched',
+        data: sellers,
+      });
+    }
+
     if (id) {
       if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(200).json({
           success: false,
           message: 'Invalid seller ID',
-          data: null
+          data: null,
         });
       }
 
@@ -83,53 +142,87 @@ exports.getSellers = async (req, res) => {
         return res.status(200).json({
           success: false,
           message: 'Seller not found',
-          data: null
+          data: null,
         });
       }
 
       return res.status(200).json({
         success: true,
         message: 'Seller details fetched',
-        data: seller
+        data: seller,
       });
     }
 
-    // Get all sellers
-    const sellers = await User.find(
-      { role: 'seller' },
-      { password: 0, token: 0 }
-    ).sort({ createdAt: -1 });
+    const filter = { role: 'seller' };
+
+    if (isActive === 'true') filter.isActive = true;
+    else if (isActive === 'false') filter.isActive = false;
+
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim();
+      filter.$or = [
+        { name: { $regex: term, $options: 'i' } },
+        { email: { $regex: term, $options: 'i' } },
+        { phone: { $regex: term, $options: 'i' } },
+        { 'sellerDetails.gstin': { $regex: term, $options: 'i' } },
+      ];
+    }
+
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const skipNum = (Math.max(1, parseInt(page, 10)) - 1) * limitNum;
+
+    const [sellers, total] = await Promise.all([
+      User.find(filter, { password: 0, token: 0 })
+        .sort({ createdAt: -1 })
+        .skip(skipNum)
+        .limit(limitNum),
+      User.countDocuments(filter),
+    ]);
 
     return res.status(200).json({
       success: true,
-      message: 'All sellers fetched',
-      data: sellers
+      message: 'Sellers fetched',
+      data: {
+        sellers,
+        total,
+        totalPages: Math.ceil(total / limitNum) || 1,
+        page: Math.max(1, parseInt(page, 10)),
+      },
     });
-
   } catch (err) {
     console.error('Get Sellers Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
-      data: null
+      data: null,
     });
   }
 };
 
-
-
 exports.updateSeller = async (req, res) => {
   try {
-    const admin = req.user;
     const { id } = req.params;
 
+    delete req.body.role;
+    delete req.body.password;
+    delete req.body.token;
+    delete req.body.gender;
 
-    // Prevent role and sensitive data updates
-    if (req.body.role || req.body.password || req.body.token) {
-      delete req.body.role;
-      delete req.body.password;
-      delete req.body.token;
+    const sellerDetails = parseSellerDetails(req.body);
+    if (sellerDetails) {
+      if (sellerDetails.gstin && !isValidGstin(sellerDetails.gstin)) {
+        return res.status(200).json({
+          success: false,
+          message: 'Invalid GSTIN format',
+          data: null,
+        });
+      }
+      if (sellerDetails.gstin) {
+        sellerDetails.gstin = sellerDetails.gstin.trim().toUpperCase();
+      }
+      req.body.sellerDetails = sellerDetails;
     }
+    delete req.body.gstin;
 
     const updatedSeller = await User.findOneAndUpdate(
       { _id: id, role: 'seller' },
@@ -141,35 +234,32 @@ exports.updateSeller = async (req, res) => {
       return res.status(200).json({
         success: false,
         message: 'Seller not found',
-        data: null
+        data: null,
       });
     }
 
     return res.status(200).json({
       success: true,
       message: 'Seller updated successfully',
-      data: updatedSeller
+      data: updatedSeller,
     });
-
   } catch (err) {
     console.error('Update Seller Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
-      data: null
+      data: null,
     });
   }
 };
 
 exports.deleteSeller = async (req, res) => {
   try {
-    const admin = req.user;
     const { id } = req.params;
 
-    // Soft delete (set isActive to false)
     const deletedSeller = await User.findOneAndUpdate(
       { _id: id, role: 'seller' },
-      { isActive: false },
+      { isActive: false, token: null },
       { new: true }
     ).select('-password -token');
 
@@ -177,22 +267,64 @@ exports.deleteSeller = async (req, res) => {
       return res.status(200).json({
         success: false,
         message: 'Seller not found',
-        data: null
+        data: null,
       });
     }
+
+    await Product.updateMany({ sellerId: id }, { isActive: false });
 
     return res.status(200).json({
       success: true,
       message: 'Seller deactivated successfully',
-      data: deletedSeller
+      data: deletedSeller,
     });
-
   } catch (err) {
     console.error('Delete Seller Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Internal Server Error',
-      data: null
+      data: null,
+    });
+  }
+};
+
+exports.resetSellerPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(200).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+        data: null,
+      });
+    }
+
+    const seller = await User.findOne({ _id: id, role: 'seller' });
+    if (!seller) {
+      return res.status(200).json({
+        success: false,
+        message: 'Seller not found',
+        data: null,
+      });
+    }
+
+    seller.password = await hashPassword(password);
+    seller.token = null;
+    await seller.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Seller password reset successfully',
+      data: null,
+    });
+  } catch (err) {
+    console.error('Reset Seller Password Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+      data: null,
     });
   }
 };

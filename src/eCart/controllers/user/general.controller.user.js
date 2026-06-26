@@ -178,6 +178,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = await hashPassword(newPassword);
+    user.token = null;
     await user.save();
 
     return res.status(200).json({

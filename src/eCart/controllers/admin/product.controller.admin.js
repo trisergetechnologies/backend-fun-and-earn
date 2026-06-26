@@ -1,6 +1,11 @@
 const Category = require("../../models/Category");
 const Product = require("../../models/Product");
 const User = require("../../../models/User");
+const {
+  buildImagesForCreate,
+  buildImagesForUpdate,
+  validateImageCount,
+} = require("../../../utils/productImages");
 
 exports.addProduct = async (req, res) => {
   try {
@@ -61,6 +66,16 @@ exports.addProduct = async (req, res) => {
       }
     }
 
+    const images = buildImagesForCreate(req);
+    const imageCheck = validateImageCount(images.length);
+    if (!imageCheck.valid) {
+      return res.status(200).json({
+        success: false,
+        message: imageCheck.message,
+        data: null,
+      });
+    }
+
     const newProduct = new Product({
       sellerId: sellerId,
       categoryId,
@@ -73,7 +88,7 @@ exports.addProduct = async (req, res) => {
       gst,
       variations,
       createdByRole: user.role,
-      images: req.file ? [req.file.url] : []
+      images,
     });
 
     await newProduct.save();
@@ -139,6 +154,9 @@ exports.getProducts = async (req, res) => {
     if (req.query.categoryId && req.query.categoryId.trim()) {
       queryFilter.categoryId = req.query.categoryId.trim();
     }
+    if (req.query.sellerId && req.query.sellerId.trim()) {
+      queryFilter.sellerId = req.query.sellerId.trim();
+    }
     if (req.query.isActive !== undefined && req.query.isActive !== '') {
       queryFilter.isActive = req.query.isActive === 'true';
     }
@@ -188,10 +206,30 @@ exports.updateProduct = async (req, res) => {
     const admin = req.user;
     const { id } = req.params;
 
-    // Remove images from body — images are handled via file upload
+    const existing = await Product.findById(id);
+    if (!existing) {
+      return res.status(200).json({
+        success: false,
+        message: 'Product not found',
+        data: null,
+      });
+    }
+
+    const mergedImages = buildImagesForUpdate(req, existing.images || []);
+    const imageCheck = validateImageCount(mergedImages.length);
+    if (!imageCheck.valid) {
+      return res.status(200).json({
+        success: false,
+        message: imageCheck.message,
+        data: null,
+      });
+    }
+
+    // Remove image fields from body — mergedImages is applied explicitly below
     if (req.body.images) {
       delete req.body.images;
     }
+    delete req.body.existingImages;
 
     // Parse gst if provided as string
     if (req.body.gst !== undefined && req.body.gst !== '') {
@@ -211,7 +249,7 @@ exports.updateProduct = async (req, res) => {
 
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
-      req.body,
+      { ...req.body, images: mergedImages },
       { new: true, runValidators: true }
     )
       .populate('sellerId', 'name email')
@@ -221,14 +259,8 @@ exports.updateProduct = async (req, res) => {
       return res.status(200).json({
         success: false,
         message: 'Product not found',
-        data: null
+        data: null,
       });
-    }
-
-    // Handle new image upload
-    if (req.file) {
-      updatedProduct.images = [req.file.url];
-      await updatedProduct.save();
     }
 
     // Recalculate finalPrice if price or discount changed

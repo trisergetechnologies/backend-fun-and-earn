@@ -7,6 +7,7 @@ jest.mock('../../../models/Product', () => {
   const MockProduct = jest.fn().mockImplementation(function (attrs) {
     return { ...attrs, save };
   });
+  MockProduct.findById = jest.fn();
   MockProduct.findByIdAndUpdate = jest.fn();
   return MockProduct;
 });
@@ -113,6 +114,7 @@ describe('product.controller.admin', () => {
         images: [],
         save: jest.fn().mockResolvedValue(undefined),
       };
+      Product.findById.mockResolvedValue({ images: ['https://x/old.jpg'] });
       Product.findByIdAndUpdate.mockReturnValue({
         populate: jest.fn().mockReturnValue({
           populate: jest.fn().mockResolvedValue(updatedDoc),
@@ -121,7 +123,11 @@ describe('product.controller.admin', () => {
 
       const req = {
         params: { id: 'p1' },
-        body: { gst: '0.12', variations: '[{"name":"Color","options":["Red"]}]' },
+        body: {
+          gst: '0.12',
+          variations: '[{"name":"Color","options":["Red"]}]',
+          existingImages: '["https://x/old.jpg"]',
+        },
       };
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
@@ -132,6 +138,42 @@ describe('product.controller.admin', () => {
         expect.objectContaining({
           gst: 0.12,
           variations: [{ name: 'Color', options: ['Red'] }],
+          images: ['https://x/old.jpg'],
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('applies image removals via existingImages before update', async () => {
+      const updatedDoc = {
+        _id: 'p1',
+        price: 200,
+        discountPercent: 10,
+        finalPrice: 180,
+        images: ['https://x/keep.jpg'],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      Product.findById.mockResolvedValue({
+        images: ['https://x/keep.jpg', 'https://x/remove.jpg'],
+      });
+      Product.findByIdAndUpdate.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          populate: jest.fn().mockResolvedValue(updatedDoc),
+        }),
+      });
+
+      const req = {
+        params: { id: 'p1' },
+        body: { existingImages: JSON.stringify(['https://x/keep.jpg']) },
+      };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateProduct(req, res);
+
+      expect(Product.findByIdAndUpdate).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          images: ['https://x/keep.jpg'],
         }),
         expect.any(Object)
       );

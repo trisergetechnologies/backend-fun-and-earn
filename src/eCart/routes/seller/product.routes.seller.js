@@ -1,8 +1,18 @@
 const express = require('express');
-const { singleImageUpload } = require('../../../middlewares/uploadMiddleware');
-const { addProduct } = require('../../controllers/seller/product.controller.seller');
+const { flexibleProductImageUpload } = require('../../../middlewares/uploadMiddleware');
+const {
+  addProduct,
+  getProducts,
+  updateProduct,
+  deleteProduct,
+} = require('../../controllers/seller/product.controller.seller');
+
 const sellerProductRouter = express.Router();
 
-sellerProductRouter.post('/addproduct', singleImageUpload('image'), addProduct);
+sellerProductRouter.post('/addproduct', flexibleProductImageUpload(), addProduct);
+sellerProductRouter.get('/getproducts', getProducts);
+sellerProductRouter.get('/getproducts/:id', getProducts);
+sellerProductRouter.put('/updateproduct/:id', flexibleProductImageUpload(), updateProduct);
+sellerProductRouter.delete('/deleteproduct/:id', deleteProduct);
 
 module.exports = sellerProductRouter;

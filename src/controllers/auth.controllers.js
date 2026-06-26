@@ -4,8 +4,8 @@ const { hashPassword, verifyPassword } = require("../utils/bcrypt");
 const { generateToken } = require("../utils/jwt");
 const nodemailer = require('nodemailer');
 
-// Only user and seller can self-register
-const ALLOWED_ROLES = ['user', 'seller'];
+// Only end-users can self-register; admin and seller are created by admin
+const ALLOWED_ROLES = ['user'];
 
 exports.register = async (req, res) => {
   try {
@@ -198,11 +198,16 @@ exports.login = async (req, res) => {
       return res.status(200).json({ success: false, message: 'Invalid credentials', data: null });
     }
 
-    // if(user.role !== 'user') {
-    //   return res.status(200).json({ success: false, message: 'Invalid role for login', data: null });
-    // }
+    if (user.isActive === false) {
+      return res.status(200).json({
+        success: false,
+        message: 'Account is deactivated. Please contact support.',
+        data: null,
+      });
+    }
 
-    if (!user.applications.includes(loginApp)) {
+    // Dashboard roles (admin/seller) skip app activation check
+    if (user.role === 'user' && !user.applications.includes(loginApp)) {
       return res.status(200).json({
         success: false,
         message: `You are registered with another app. Please activate your account for ${loginApp}`,

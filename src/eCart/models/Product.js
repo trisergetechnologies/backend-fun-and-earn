@@ -24,9 +24,15 @@ const ProductSchema = new mongoose.Schema({
     trim: true
   },
 
-  images: [{
-    type: String  // URL or filename
-  }],
+  images: {
+    type: [String],
+    validate: {
+      validator(arr) {
+        return !arr || arr.length <= 5;
+      },
+      message: 'Maximum 5 images allowed per product',
+    },
+  },
 
   price: {
     type: Number,
