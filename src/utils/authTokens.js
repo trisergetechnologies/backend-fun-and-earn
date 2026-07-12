@@ -8,8 +8,8 @@ const {
 
 /** Max concurrent refresh sessions per user (Mart + Reels + Admin + devices). */
 const MAX_REFRESH_SESSIONS = 10;
-/** Align with REFRESH_TOKEN_TTL ('30d'). */
-const REFRESH_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Align with REFRESH_TOKEN_TTL ('7d'). */
+const REFRESH_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function hashRefreshToken(refreshToken) {
   return crypto.createHash('sha256').update(String(refreshToken)).digest('hex');

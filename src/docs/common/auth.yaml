@@ -65,13 +65,13 @@ paths:
                             description: Long-lived session JWT (15d). Required for Admin and legacy apps.
                           accessToken:
                             type: string
-                            description: Short-lived access JWT (1h) for updated mobile apps.
+                            description: Access JWT (12h) for updated mobile apps.
                           refreshToken:
                             type: string
-                            description: Long-lived refresh JWT (30d). Use with POST /auth/refresh.
+                            description: Refresh JWT (7d). Use with POST /auth/refresh.
                           expiresIn:
                             type: integer
-                            example: 120
+                            example: 43200
                           user:
                             type: object
                             properties:
@@ -146,13 +146,13 @@ paths:
                             description: Long-lived session JWT (15d). Required for Admin and legacy apps.
                           accessToken:
                             type: string
-                            description: Short-lived access JWT (1h) for updated mobile apps.
+                            description: Access JWT (12h) for updated mobile apps.
                           refreshToken:
                             type: string
-                            description: Long-lived refresh JWT (30d). Use with POST /auth/refresh.
+                            description: Refresh JWT (7d). Use with POST /auth/refresh.
                           expiresIn:
                             type: integer
-                            example: 120
+                            example: 43200
                           user:
                             type: object
                             properties:
@@ -222,7 +222,7 @@ paths:
                         type: string
                       expiresIn:
                         type: integer
-                        example: 120
+                        example: 43200
         '401':
           description: Invalid or expired refresh token
           content:

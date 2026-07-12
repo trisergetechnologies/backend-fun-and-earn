@@ -51,7 +51,7 @@ describe('auth token helpers', () => {
     expect(tokens.refreshToken).toBeTruthy();
     expect(tokens.sessionId).toBeTruthy();
     expect(tokens.refreshTokenHash).toBe(hashRefreshToken(tokens.refreshToken));
-    expect(tokens.expiresIn).toBe(120);
+    expect(tokens.expiresIn).toBe(12 * 60 * 60);
 
     expect(verifyToken(tokens.sessionToken).type).toBe('session');
     expect(verifyToken(tokens.accessToken).type).toBe('access');
