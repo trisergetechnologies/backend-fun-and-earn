@@ -4,7 +4,7 @@ exports.getCategories = async (req, res) => {
   try {
     const categories = await Category.find({ isActive: true })
       .sort({ title: 1 })
-      .select('title slug description isActive');
+      .select('title slug description isActive icon');
 
     return res.status(200).json({
       success: true,

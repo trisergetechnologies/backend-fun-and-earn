@@ -19,6 +19,13 @@ const CategorySchema = new mongoose.Schema({
     default: ''
   },
 
+  /** Ionicons glyph name used by Dream Mart (e.g. shirt-outline) */
+  icon: {
+    type: String,
+    default: 'grid-outline',
+    trim: true,
+  },
+
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

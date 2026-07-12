@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Category = require('../../models/Category');
 const Product = require('../../models/Product');
+const { resolveCategoryIcon } = require('../../../utils/categoryIcons');
 
 const generateSlug = (text) =>
   text
@@ -23,7 +24,7 @@ exports.addCategory = async (req, res) => {
       });
     }
 
-    const { title, description = '' } = req.body;
+    const { title, description = '', icon } = req.body;
     if (!title || !title.trim()) {
       return res.status(200).json({
         success: false,
@@ -32,12 +33,14 @@ exports.addCategory = async (req, res) => {
       });
     }
 
+    const resolvedIcon = resolveCategoryIcon(icon);
     const slug = generateSlug(title);
 
     const inactiveMatch = await Category.findOne({ slug, isActive: false });
     if (inactiveMatch) {
       inactiveMatch.title = title.trim();
       inactiveMatch.description = description;
+      inactiveMatch.icon = resolvedIcon;
       inactiveMatch.isActive = true;
       inactiveMatch.ownerId = admin._id;
       inactiveMatch.ownerRole = 'admin';
@@ -63,6 +66,7 @@ exports.addCategory = async (req, res) => {
       title: title.trim(),
       slug,
       description,
+      icon: resolvedIcon,
       ownerId: admin._id,
       ownerRole: 'admin',
     });
@@ -87,7 +91,7 @@ exports.updateCategory = async (req, res) => {
   try {
     const admin = req.user;
     const { id } = req.params;
-    const { title, description, isActive } = req.body;
+    const { title, description, isActive, icon } = req.body;
 
     if (admin.role !== 'admin') {
       return res.status(403).json({
@@ -126,6 +130,10 @@ exports.updateCategory = async (req, res) => {
 
     if (description !== undefined) {
       category.description = description;
+    }
+
+    if (icon !== undefined) {
+      category.icon = resolveCategoryIcon(icon);
     }
 
     if (isActive !== undefined) {
