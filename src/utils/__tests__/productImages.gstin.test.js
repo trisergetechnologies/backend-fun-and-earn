@@ -4,7 +4,7 @@ const {
   validateImageCount,
   MAX_IMAGES,
 } = require('../productImages');
-const { isValidGstin } = require('../gstin');
+const { normalizeGstin, GSTIN_MAX_LENGTH } = require('../gstin');
 
 describe('productImages', () => {
   it('buildImagesForCreate uses legacy single file', () => {
@@ -52,11 +52,28 @@ describe('productImages', () => {
 });
 
 describe('gstin', () => {
-  it('validates correct GSTIN', () => {
-    expect(isValidGstin('29ABBCA7044H1ZN')).toBe(true);
+  it('allows empty GSTIN (optional)', () => {
+    expect(normalizeGstin('')).toEqual({ ok: true, value: '' });
+    expect(normalizeGstin(null)).toEqual({ ok: true, value: '' });
+    expect(normalizeGstin('   ')).toEqual({ ok: true, value: '' });
   });
 
-  it('rejects invalid GSTIN', () => {
-    expect(isValidGstin('INVALIDGSTINXX')).toBe(false);
+  it('saves any string within max length without format checks', () => {
+    expect(normalizeGstin('INVALIDGSTINXX')).toEqual({
+      ok: true,
+      value: 'INVALIDGSTINXX',
+    });
+    expect(normalizeGstin('29ABBCA7044H1ZN')).toEqual({
+      ok: true,
+      value: '29ABBCA7044H1ZN',
+    });
+  });
+
+  it('rejects when longer than max characters', () => {
+    const tooLong = 'A'.repeat(GSTIN_MAX_LENGTH + 1);
+    expect(normalizeGstin(tooLong)).toEqual({
+      ok: false,
+      message: `GSTIN must be at most ${GSTIN_MAX_LENGTH} characters`,
+    });
   });
 });

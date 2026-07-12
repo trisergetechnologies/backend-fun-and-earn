@@ -442,8 +442,17 @@ exports.markPaymentFailed = async (req, res) => {
     const intent = await PaymentIntent.findById(paymentIntentId).session(session);
     if (!intent) throw new Error('PaymentIntent not found');
 
+    if (String(intent.userId) !== String(user._id)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({
+        success: false,
+        message: 'Not allowed to mark this payment as failed',
+      });
+    }
+
     // Idempotent check — if already captured or failed, just return
-    if (['captured', 'failed', 'cancelled'].includes(intent.status)) {
+    if (['captured', 'failed', 'cancelled', 'expired'].includes(intent.status)) {
       await session.commitTransaction();
       session.endSession();
       return res.status(200).json({
@@ -464,6 +473,18 @@ exports.markPaymentFailed = async (req, res) => {
     if (intent.referenceId) {
       const order = await Order.findById(intent.referenceId).session(session);
       if (order) {
+        if (order.paymentStatus === 'paid') {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({
+            success: true,
+            message: 'Order already paid — payment not marked failed',
+            status: 'captured',
+          });
+        }
+
+        const shouldRollback = order.paymentStatus === 'pending';
+
         order.paymentStatus = 'failed';
         order.status = 'cancelled';
         order.trackingUpdates.push({
@@ -472,38 +493,40 @@ exports.markPaymentFailed = async (req, res) => {
         });
         await order.save({ session });
 
-        // refund wallet if used
-        if (order.usedWalletAmount && order.usedWalletAmount > 0) {
-          await User.findByIdAndUpdate(
-            order.buyerId,
-            { $inc: { 'wallets.eCartWallet': order.usedWalletAmount } },
-            { session }
-          );
+        if (shouldRollback) {
+          // refund wallet if used
+          if (order.usedWalletAmount && order.usedWalletAmount > 0) {
+            await User.findByIdAndUpdate(
+              order.buyerId,
+              { $inc: { 'wallets.eCartWallet': order.usedWalletAmount } },
+              { session }
+            );
 
-          await WalletTransaction.create(
-            [
-              {
-                userId: order.buyerId,
-                type: 'earn',
-                source: 'system',
-                fromWallet: 'eCartWallet',
-                amount: order.usedWalletAmount,
-                status: 'success',
-                triggeredBy: 'system',
-                notes: `Refunded wallet (payment failed: ${reason})`
-              }
-            ],
-            { session }
-          );
-        }
+            await WalletTransaction.create(
+              [
+                {
+                  userId: order.buyerId,
+                  type: 'earn',
+                  source: 'system',
+                  fromWallet: 'eCartWallet',
+                  amount: order.usedWalletAmount,
+                  status: 'success',
+                  triggeredBy: 'system',
+                  notes: `Refunded wallet (payment failed: ${reason})`
+                }
+              ],
+              { session }
+            );
+          }
 
-        // restore stock
-        for (const item of order.items) {
-          await Product.findByIdAndUpdate(
-            item.productId,
-            { $inc: { stock: item.quantity } },
-            { session }
-          );
+          // restore stock
+          for (const item of order.items) {
+            await Product.findByIdAndUpdate(
+              item.productId,
+              { $inc: { stock: item.quantity } },
+              { session }
+            );
+          }
         }
       }
     }

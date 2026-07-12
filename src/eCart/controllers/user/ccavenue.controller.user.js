@@ -39,6 +39,16 @@ async function handleCcavenuePaymentSuccess(intent, orderId, paymentDetails) {
       return;
     }
 
+    if (freshIntent.status === 'failed' || freshIntent.status === 'expired') {
+      log('payment_success_skipped', {
+        paymentIntentId: intent._id?.toString(),
+        reason: `intent already ${freshIntent.status} — not resurrecting`,
+      });
+      await session.commitTransaction();
+      session.endSession();
+      return;
+    }
+
     freshIntent.status = 'captured';
     freshIntent.meta = freshIntent.meta || {};
     freshIntent.meta.ccavenue = {

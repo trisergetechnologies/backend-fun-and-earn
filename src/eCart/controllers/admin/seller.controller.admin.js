@@ -2,7 +2,7 @@ const User = require("../../../models/User");
 const Product = require("../../models/Product");
 const mongoose = require('mongoose');
 const { hashPassword } = require("../../../utils/bcrypt");
-const { isValidGstin } = require("../../../utils/gstin");
+const { normalizeGstin } = require("../../../utils/gstin");
 
 function parseSellerDetails(body) {
   const raw = body.sellerDetails;
@@ -28,9 +28,9 @@ function validateSellerInput({ name, email, password, phone, sellerDetails }, is
     return 'Phone is required';
   }
   const details = sellerDetails || {};
-  const gstin = details.gstin?.trim();
-  if (gstin && !isValidGstin(gstin)) {
-    return 'Invalid GSTIN format';
+  const gstinResult = normalizeGstin(details.gstin);
+  if (!gstinResult.ok) {
+    return gstinResult.message;
   }
   return null;
 }
@@ -65,6 +65,7 @@ exports.createSeller = async (req, res) => {
     }
 
     const hashedPassword = await hashPassword(password);
+    const gstinResult = normalizeGstin(sellerDetails?.gstin);
     const newSeller = await User.create({
       name,
       email,
@@ -75,14 +76,12 @@ exports.createSeller = async (req, res) => {
       applications: ['eCart'],
       isActive: true,
       sellerDetails: {
-        gstin: sellerDetails.gstin?.trim()
-          ? sellerDetails.gstin.trim().toUpperCase()
-          : '',
-        contactPersonName: sellerDetails.contactPersonName || '',
-        street: sellerDetails.street || '',
-        city: sellerDetails.city || '',
-        state: sellerDetails.state || '',
-        pincode: sellerDetails.pincode || '',
+        gstin: gstinResult.ok ? gstinResult.value : '',
+        contactPersonName: sellerDetails?.contactPersonName || '',
+        street: sellerDetails?.street || '',
+        city: sellerDetails?.city || '',
+        state: sellerDetails?.state || '',
+        pincode: sellerDetails?.pincode || '',
       },
     });
 
@@ -210,15 +209,15 @@ exports.updateSeller = async (req, res) => {
 
     const sellerDetails = parseSellerDetails(req.body);
     if (sellerDetails) {
-      const gstin = sellerDetails.gstin?.trim();
-      if (gstin && !isValidGstin(gstin)) {
+      const gstinResult = normalizeGstin(sellerDetails.gstin);
+      if (!gstinResult.ok) {
         return res.status(200).json({
           success: false,
-          message: 'Invalid GSTIN format',
+          message: gstinResult.message,
           data: null,
         });
       }
-      sellerDetails.gstin = gstin ? gstin.toUpperCase() : '';
+      sellerDetails.gstin = gstinResult.value;
       req.body.sellerDetails = sellerDetails;
     }
     delete req.body.gstin;

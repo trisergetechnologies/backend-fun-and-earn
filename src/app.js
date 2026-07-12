@@ -31,6 +31,13 @@ try {
 }
 
 try {
+  require('./jobs/expireCcavenuePayments');
+  console.log('expireCcavenuePayments loaded');
+} catch (e) {
+  console.error('expireCcavenuePayments failed', e);
+}
+
+try {
   require('./jobs/packageBuyCron');
   console.log('packageBuyCron loaded');
 } catch (e) {
