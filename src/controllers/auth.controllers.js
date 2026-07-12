@@ -1,11 +1,30 @@
 const Otp = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword, verifyPassword } = require("../utils/bcrypt");
-const { generateToken } = require("../utils/jwt");
+const {
+  issueAuthTokens,
+  applyAuthTokensToUser,
+  authTokensResponseData,
+  hashRefreshToken,
+} = require("../utils/authTokens");
+const { verifyToken, generateAccessToken, generateRefreshToken, ACCESS_TOKEN_EXPIRES_IN_SEC } = require("../utils/jwt");
 const nodemailer = require('nodemailer');
 
 // Only end-users can self-register; admin and seller are created by admin
 const ALLOWED_ROLES = ['user'];
+
+function buildUserPayload(user) {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    gender: user.gender,
+    role: user.role,
+    applications: user.applications,
+    phone: user.phone,
+    referralCode: user.referralCode,
+  };
+}
 
 exports.register = async (req, res) => {
   try {
@@ -133,25 +152,22 @@ exports.register = async (req, res) => {
 
     await newUser.save();
 
-    const token = generateToken({ userId: newUser._id, role: newUser.role });
-    newUser.token = token;
+    const tokens = issueAuthTokens(newUser);
+    applyAuthTokensToUser(newUser, tokens);
     await newUser.save();
 
     return res.status(200).json({
       success: true,
       message: 'Registration successful',
-      data: {
-        token,
-        user: {
-          id: newUser._id,
-          name: newUser.name,
-          email: newUser.email,
-          gender: newUser.gender,
-          role: newUser.role,
-          applications: newUser.applications,
-          referralCode: newUser.referralCode,
-        }
-      }
+      data: authTokensResponseData(tokens, {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        gender: newUser.gender,
+        role: newUser.role,
+        applications: newUser.applications,
+        referralCode: newUser.referralCode,
+      }),
     });
 
   } catch (err) {
@@ -215,26 +231,14 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken({ userId: user._id, role: user.role });
-    user.token = token;
+    const tokens = issueAuthTokens(user);
+    applyAuthTokensToUser(user, tokens);
     await user.save();
 
     return res.status(200).json({
       success: true,
       message: 'Login successful',
-      data: {
-        token,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          gender: user.gender,
-          role: user.role,
-          applications: user.applications,
-          phone: user.phone,
-          referralCode: user.referralCode,
-        }
-      }
+      data: authTokensResponseData(tokens, buildUserPayload(user)),
     });
 
   } catch (err) {
@@ -295,6 +299,101 @@ exports.sendOtp = async (req, res) => {
       success: false,
       message: 'Failed to send OTP',
       data: null
+    });
+  }
+};
+
+/**
+ * Exchange a valid refresh token for a new access (+ rotated refresh) token.
+ * Response aliases `token` to the new access token for convenience.
+ */
+exports.refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'Refresh token is required',
+        data: null,
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyToken(refreshToken);
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+        data: null,
+      });
+    }
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+        data: null,
+      });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+        data: null,
+      });
+    }
+
+    if (user.isActive === false) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Account is deactivated',
+        data: null,
+      });
+    }
+
+    if (!user.refreshTokenHash) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+        data: null,
+      });
+    }
+
+    const incomingHash = hashRefreshToken(refreshToken);
+    if (incomingHash !== user.refreshTokenHash) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token',
+        data: null,
+      });
+    }
+
+    const payload = { userId: user._id.toString(), role: user.role };
+    const accessToken = generateAccessToken(payload);
+    const newRefreshToken = generateRefreshToken(payload);
+    user.refreshTokenHash = hashRefreshToken(newRefreshToken);
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Token refreshed',
+      data: {
+        token: accessToken,
+        accessToken,
+        refreshToken: newRefreshToken,
+        expiresIn: ACCESS_TOKEN_EXPIRES_IN_SEC,
+      },
+    });
+  } catch (err) {
+    console.error('Refresh Token Error:', err);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired refresh token',
+      data: null,
     });
   }
 };

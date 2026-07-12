@@ -311,6 +311,7 @@ exports.resetSellerPassword = async (req, res) => {
 
     seller.password = await hashPassword(password);
     seller.token = null;
+    seller.refreshTokenHash = null;
     await seller.save();
 
     return res.status(200).json({

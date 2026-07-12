@@ -92,7 +92,8 @@ const UserSchema = new mongoose.Schema({
   },
   isActive: { type: Boolean, default: true },
 
-  token: { type: String, default: "jwt_token" }, // JWT token for user sessions
+  token: { type: String, default: "jwt_token" }, // Session JWT for legacy clients / Admin
+  refreshTokenHash: { type: String, default: null }, // sha256 of current refresh token
 }, { timestamps: true });
 
 UserSchema.index({ referredBy: 1 });

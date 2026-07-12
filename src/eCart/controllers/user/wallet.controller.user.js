@@ -40,16 +40,40 @@ exports.getWallet = async (req, res) => {
 exports.getWalletTransactions = async (req, res) => {
   try {
     const userId = req.user._id;
+    const limitRaw = req.query.limit;
 
-    // Fetch transactions from DB directly, sorted by newest first
-    const transactions = await WalletTransaction.find({ userId }).sort({ createdAt: -1 });
+    // Legacy: no limit param → return full list (backward compatible)
+    if (limitRaw == null || limitRaw === '') {
+      const transactions = await WalletTransaction.find({ userId }).sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        success: true,
+        count: transactions.length,
+        data: transactions,
+      });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limitRaw, 10) || 20));
+    const skip = (page - 1) * limitNum;
+
+    const [transactions, total] = await Promise.all([
+      WalletTransaction.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      WalletTransaction.countDocuments({ userId }),
+    ]);
 
     return res.status(200).json({
       success: true,
       count: transactions.length,
+      total,
+      page,
+      limit: limitNum,
+      hasMore: skip + transactions.length < total,
       data: transactions,
     });
-
   } catch (error) {
     console.error('Error fetching wallet transactions:', error);
     return res.status(500).json({

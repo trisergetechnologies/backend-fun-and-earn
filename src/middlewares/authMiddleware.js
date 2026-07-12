@@ -8,6 +8,11 @@ const LEGACY_TOKEN_SENTINEL = 'jwt_token';
 /**
  * Middleware to protect routes based on user roles.
  * @param {Array} allowedRoles - Array of allowed roles like ['admin', 'seller']
+ *
+ * Token types:
+ * - access: short-lived; requires refreshTokenHash (session not revoked)
+ * - session / missing type: legacy long-lived; requires Bearer === user.token
+ * - refresh: never accepted on API routes
  */
 const authMiddleware = (allowedRoles = []) => {
   return async (req, res, next) => {
@@ -23,6 +28,14 @@ const authMiddleware = (allowedRoles = []) => {
 
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
+
+      if (decoded.type === 'refresh') {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: Invalid or expired token',
+          data: null,
+        });
+      }
 
       const user = await User.findById(decoded.userId).populate('package');
       if (!user) {
@@ -41,26 +54,35 @@ const authMiddleware = (allowedRoles = []) => {
         });
       }
 
-      // Session invalidated on deactivate / password reset (token cleared)
-      if (user.token === null || user.token === '') {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized: Session expired',
-          data: null,
-        });
-      }
+      if (decoded.type === 'access') {
+        if (!user.refreshTokenHash) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session expired',
+            data: null,
+          });
+        }
+      } else {
+        // Legacy / session token path (Admin + unupdated apps)
+        if (user.token === null || user.token === '') {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session expired',
+            data: null,
+          });
+        }
 
-      // Match stored session token when set (skip legacy default sentinel)
-      if (
-        user.token &&
-        user.token !== LEGACY_TOKEN_SENTINEL &&
-        user.token !== token
-      ) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized: Session expired',
-          data: null,
-        });
+        if (
+          user.token &&
+          user.token !== LEGACY_TOKEN_SENTINEL &&
+          user.token !== token
+        ) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session expired',
+            data: null,
+          });
+        }
       }
 
       req.user = user;

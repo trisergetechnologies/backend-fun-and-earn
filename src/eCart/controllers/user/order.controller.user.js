@@ -816,23 +816,55 @@ exports.getOrders = async (req, res) => {
   const orderId = req.query.id;
 
   try {
-    let orders;
-
     if (orderId) {
-      orders = await Order.findOne({ _id: orderId, buyerId: userId });
-      if (!orders) {
+      const order = await Order.findOne({ _id: orderId, buyerId: userId });
+      if (!order) {
         return res.status(404).json({
           success: false,
           message: 'Order not found'
         });
       }
-    } else {
-      orders = await Order.find({ buyerId: userId }).sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Order(s) fetched successfully',
+        data: order
+      });
     }
+
+    const limitRaw = req.query.limit;
+
+    // Legacy: no limit param → return full list (backward compatible)
+    if (limitRaw == null || limitRaw === '') {
+      const orders = await Order.find({ buyerId: userId }).sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Order(s) fetched successfully',
+        data: orders
+      });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limitRaw, 10) || 20));
+    const skip = (page - 1) * limitNum;
+
+    const [orders, total] = await Promise.all([
+      Order.find({ buyerId: userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Order.countDocuments({ buyerId: userId }),
+    ]);
 
     return res.status(200).json({
       success: true,
       message: 'Order(s) fetched successfully',
+      count: orders.length,
+      total,
+      page,
+      limit: limitNum,
+      hasMore: skip + orders.length < total,
       data: orders
     });
 

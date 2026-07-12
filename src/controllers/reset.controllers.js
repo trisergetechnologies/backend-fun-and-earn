@@ -100,9 +100,11 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // Hash new password
+    // Hash new password and invalidate all sessions
     const hashedPassword = await hashPassword(newPassword);
     user.password = hashedPassword;
+    user.token = null;
+    user.refreshTokenHash = null;
     await user.save();
 
     // Clean up OTPs
