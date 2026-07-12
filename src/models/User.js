@@ -93,7 +93,19 @@ const UserSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 
   token: { type: String, default: "jwt_token" }, // Session JWT for legacy clients / Admin
-  refreshTokenHash: { type: String, default: null }, // sha256 of current refresh token
+  /** @deprecated Prefer refreshSessions; kept for migration / presence checks. */
+  refreshTokenHash: { type: String, default: null },
+  /** Multi-device / multi-app refresh sessions (Mart, Reels, Admin, phones). */
+  refreshSessions: [
+    {
+      id: { type: String, required: true },
+      tokenHash: { type: String, required: true },
+      app: { type: String, default: null },
+      createdAt: { type: Date, default: Date.now },
+      lastUsedAt: { type: Date, default: Date.now },
+      expiresAt: { type: Date, required: true },
+    },
+  ],
 }, { timestamps: true });
 
 UserSchema.index({ referredBy: 1 });

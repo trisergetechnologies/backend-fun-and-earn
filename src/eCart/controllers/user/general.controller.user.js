@@ -1,5 +1,6 @@
 const User = require("../../../models/User");
 const {verifyPassword, hashPassword} = require('../../../utils/bcrypt')
+const { clearAuthTokensOnUser } = require('../../../utils/authTokens');
 
 exports.updateProfile = async (req, res) => {
   try {
@@ -178,8 +179,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = await hashPassword(newPassword);
-    user.token = null;
-    user.refreshTokenHash = null;
+    clearAuthTokensOnUser(user);
     await user.save();
 
     return res.status(200).json({

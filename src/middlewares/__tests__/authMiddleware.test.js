@@ -92,6 +92,36 @@ describe('authMiddleware token types', () => {
     expect(req.user).toBe(user);
   });
 
+  test('accepts access token when refreshSessions are present', async () => {
+    const accessToken = jwt.sign({ userId, role: 'user', type: 'access' }, secret, {
+      expiresIn: '1h',
+    });
+    const user = {
+      _id: userId,
+      role: 'user',
+      isActive: true,
+      token: 'session-elsewhere',
+      refreshTokenHash: null,
+      refreshSessions: [
+        {
+          id: 'abc',
+          tokenHash: 'hash',
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      ],
+    };
+    mockPopulate.mockResolvedValue(user);
+
+    const req = { headers: { authorization: `Bearer ${accessToken}` } };
+    const res = mockRes();
+    const next = jest.fn();
+
+    await authMiddleware(['user'])(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toBe(user);
+  });
+
   test('rejects access token when session revoked (no refreshTokenHash)', async () => {
     const accessToken = jwt.sign({ userId, role: 'user', type: 'access' }, secret, {
       expiresIn: '1h',
@@ -102,6 +132,7 @@ describe('authMiddleware token types', () => {
       isActive: true,
       token: null,
       refreshTokenHash: null,
+      refreshSessions: [],
     };
     mockPopulate.mockResolvedValue(user);
 

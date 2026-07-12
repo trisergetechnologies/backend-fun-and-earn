@@ -3,6 +3,7 @@ const Product = require("../../models/Product");
 const mongoose = require('mongoose');
 const { hashPassword } = require("../../../utils/bcrypt");
 const { normalizeGstin } = require("../../../utils/gstin");
+const { clearAuthTokensOnUser } = require("../../../utils/authTokens");
 
 function parseSellerDetails(body) {
   const raw = body.sellerDetails;
@@ -309,8 +310,7 @@ exports.resetSellerPassword = async (req, res) => {
     }
 
     seller.password = await hashPassword(password);
-    seller.token = null;
-    seller.refreshTokenHash = null;
+    clearAuthTokensOnUser(seller);
     await seller.save();
 
     return res.status(200).json({

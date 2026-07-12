@@ -1,6 +1,7 @@
 // common/middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { hasActiveRefreshSession } = require('../utils/authTokens');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
 const LEGACY_TOKEN_SENTINEL = 'jwt_token';
@@ -10,7 +11,7 @@ const LEGACY_TOKEN_SENTINEL = 'jwt_token';
  * @param {Array} allowedRoles - Array of allowed roles like ['admin', 'seller']
  *
  * Token types:
- * - access: short-lived; requires refreshTokenHash (session not revoked)
+ * - access: short-lived; requires an active refresh session (multi or legacy hash)
  * - session / missing type: legacy long-lived; requires Bearer === user.token
  * - refresh: never accepted on API routes
  */
@@ -55,7 +56,7 @@ const authMiddleware = (allowedRoles = []) => {
       }
 
       if (decoded.type === 'access') {
-        if (!user.refreshTokenHash) {
+        if (!hasActiveRefreshSession(user)) {
           return res.status(401).json({
             success: false,
             message: 'Unauthorized: Session expired',

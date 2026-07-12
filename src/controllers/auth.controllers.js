@@ -5,9 +5,11 @@ const {
   issueAuthTokens,
   applyAuthTokensToUser,
   authTokensResponseData,
-  hashRefreshToken,
+  rotateRefreshSession,
+  revokeRefreshSession,
+  clearAuthTokensOnUser,
 } = require("../utils/authTokens");
-const { verifyToken, generateAccessToken, generateRefreshToken, ACCESS_TOKEN_EXPIRES_IN_SEC } = require("../utils/jwt");
+const { verifyToken } = require("../utils/jwt");
 const nodemailer = require('nodemailer');
 
 // Only end-users can self-register; admin and seller are created by admin
@@ -152,8 +154,8 @@ exports.register = async (req, res) => {
 
     await newUser.save();
 
-    const tokens = issueAuthTokens(newUser);
-    applyAuthTokensToUser(newUser, tokens);
+    const tokens = issueAuthTokens(newUser, { app: loginApp });
+    applyAuthTokensToUser(newUser, tokens, { app: loginApp });
     await newUser.save();
 
     return res.status(200).json({
@@ -231,8 +233,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    const tokens = issueAuthTokens(user);
-    applyAuthTokensToUser(user, tokens);
+    const tokens = issueAuthTokens(user, { app: loginApp });
+    applyAuthTokensToUser(user, tokens, { app: loginApp });
     await user.save();
 
     return res.status(200).json({
@@ -305,6 +307,7 @@ exports.sendOtp = async (req, res) => {
 
 /**
  * Exchange a valid refresh token for a new access (+ rotated refresh) token.
+ * Rotates only the matching session — other devices/apps keep working.
  * Response aliases `token` to the new access token for convenience.
  */
 exports.refresh = async (req, res) => {
@@ -355,7 +358,8 @@ exports.refresh = async (req, res) => {
       });
     }
 
-    if (!user.refreshTokenHash) {
+    const rotated = rotateRefreshSession(user, refreshToken, decoded);
+    if (!rotated) {
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired refresh token',
@@ -363,29 +367,16 @@ exports.refresh = async (req, res) => {
       });
     }
 
-    const incomingHash = hashRefreshToken(refreshToken);
-    if (incomingHash !== user.refreshTokenHash) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired refresh token',
-        data: null,
-      });
-    }
-
-    const payload = { userId: user._id.toString(), role: user.role };
-    const accessToken = generateAccessToken(payload);
-    const newRefreshToken = generateRefreshToken(payload);
-    user.refreshTokenHash = hashRefreshToken(newRefreshToken);
     await user.save();
 
     return res.status(200).json({
       success: true,
       message: 'Token refreshed',
       data: {
-        token: accessToken,
-        accessToken,
-        refreshToken: newRefreshToken,
-        expiresIn: ACCESS_TOKEN_EXPIRES_IN_SEC,
+        token: rotated.accessToken,
+        accessToken: rotated.accessToken,
+        refreshToken: rotated.refreshToken,
+        expiresIn: rotated.expiresIn,
       },
     });
   } catch (err) {
@@ -393,6 +384,63 @@ exports.refresh = async (req, res) => {
     return res.status(401).json({
       success: false,
       message: 'Invalid or expired refresh token',
+      data: null,
+    });
+  }
+};
+
+/**
+ * Revoke the refresh session for this device (optional body.refreshToken).
+ * Without a refresh token, clears all sessions (full logout).
+ * Store clients that only clear local storage remain compatible.
+ */
+exports.logout = async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+
+    if (refreshToken) {
+      let decoded;
+      try {
+        decoded = verifyToken(refreshToken);
+      } catch {
+        return res.status(200).json({
+          success: true,
+          message: 'Logged out',
+          data: null,
+        });
+      }
+
+      if (decoded.type === 'refresh' && decoded.userId) {
+        const user = await User.findById(decoded.userId);
+        if (user) {
+          revokeRefreshSession(user, refreshToken);
+          await user.save();
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Logged out',
+        data: null,
+      });
+    }
+
+    // Authenticated logout-all when Bearer access/session is present
+    if (req.user) {
+      clearAuthTokensOnUser(req.user);
+      await req.user.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out',
+      data: null,
+    });
+  } catch (err) {
+    console.error('Logout Error:', err);
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out',
       data: null,
     });
   }

@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, register, sendOtp, refresh } = require('../controllers/auth.controllers');
+const { login, register, sendOtp, refresh, logout } = require('../controllers/auth.controllers');
 const Product = require('../eCart/models/Product');
 const Category = require('../eCart/models/Category');
 const { shortVideoActivate, eCartActivate } = require('../controllers/activate.controllers');
@@ -11,6 +11,8 @@ const authRouter = express.Router();
 authRouter.post('/register', register)
 authRouter.post('/login', login);
 authRouter.post('/refresh', refresh);
+authRouter.post('/logout', logout);
+authRouter.post('/logout-all', authMiddleware(['admin', 'user', 'seller']), logout);
 authRouter.post('/sendotp', sendOtp);
 authRouter.post('/activateshortvideo', authMiddleware(["user"]) , shortVideoActivate);
 authRouter.post('/activateecart', authMiddleware(["user"]) ,eCartActivate);

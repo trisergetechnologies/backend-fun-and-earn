@@ -1,6 +1,7 @@
 const Otp = require("../models/Otp");
 const User = require("../models/User");
 const { hashPassword } = require("../utils/bcrypt");
+const { clearAuthTokensOnUser } = require("../utils/authTokens");
 const nodemailer = require('nodemailer');
 
 // Setup transporter
@@ -103,8 +104,7 @@ exports.resetPassword = async (req, res) => {
     // Hash new password and invalidate all sessions
     const hashedPassword = await hashPassword(newPassword);
     user.password = hashedPassword;
-    user.token = null;
-    user.refreshTokenHash = null;
+    clearAuthTokensOnUser(user);
     await user.save();
 
     // Clean up OTPs
