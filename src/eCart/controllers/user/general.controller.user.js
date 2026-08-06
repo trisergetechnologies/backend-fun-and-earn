@@ -37,12 +37,22 @@ exports.updateProfile = async (req, res) => {
 exports.addBankDetails = async (req, res) => {
   try {
     const user = req.user;
-    const { accountHolderName, accountNumber, ifscCode, upiId } = req.body;
+    const { accountHolderName, accountNumber, ifscCode, upiId, panNumber } = req.body;
 
-    if (!accountHolderName || !accountNumber || !ifscCode || !upiId) {
+    if (!accountHolderName || !accountNumber || !ifscCode) {
       return res.status(200).json({
         success: false,
-        message: 'All bank details are required',
+        message: 'Account holder name, account number and IFSC are required',
+        data: null
+      });
+    }
+
+    const pan =
+      typeof panNumber === 'string' ? panNumber.trim().toUpperCase() : '';
+    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      return res.status(200).json({
+        success: false,
+        message: 'Enter a valid PAN number',
         data: null
       });
     }
@@ -56,7 +66,13 @@ exports.addBankDetails = async (req, res) => {
       });
     }
 
-    user.eCartProfile.bankDetails = { accountHolderName, accountNumber, ifscCode, upiId };
+    user.eCartProfile.bankDetails = {
+      accountHolderName,
+      accountNumber,
+      ifscCode,
+      upiId: typeof upiId === 'string' ? upiId.trim() : '',
+      panNumber: pan,
+    };
     await user.save();
 
     return res.status(200).json({
@@ -74,9 +90,15 @@ exports.addBankDetails = async (req, res) => {
 exports.updateBankDetails = async (req, res) => {
   try {
     const user = req.user;
-    const { accountHolderName, accountNumber, ifscCode, upiId } = req.body;
+    const { accountHolderName, accountNumber, ifscCode, upiId, panNumber } = req.body;
 
-    if (!accountHolderName && !accountNumber && !ifscCode && !upiId) {
+    if (
+      !accountHolderName &&
+      !accountNumber &&
+      !ifscCode &&
+      upiId === undefined &&
+      panNumber === undefined
+    ) {
       return res.status(200).json({
         success: false,
         message: 'No fields provided to update',
@@ -84,12 +106,29 @@ exports.updateBankDetails = async (req, res) => {
       });
     }
 
+    if (panNumber !== undefined && panNumber !== null && String(panNumber).trim()) {
+      const pan = String(panNumber).trim().toUpperCase();
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+        return res.status(200).json({
+          success: false,
+          message: 'Enter a valid PAN number',
+          data: null
+        });
+      }
+    }
+
     const bank = user.eCartProfile.bankDetails || {};
 
     if (accountHolderName) bank.accountHolderName = accountHolderName;
     if (accountNumber) bank.accountNumber = accountNumber;
     if (ifscCode) bank.ifscCode = ifscCode;
-    if (upiId) bank.upiId = upiId;
+    if (upiId !== undefined) bank.upiId = typeof upiId === 'string' ? upiId.trim() : '';
+    if (panNumber !== undefined) {
+      bank.panNumber =
+        panNumber === null || panNumber === ''
+          ? ''
+          : String(panNumber).trim().toUpperCase();
+    }
 
     user.eCartProfile.bankDetails = bank;
     await user.save();

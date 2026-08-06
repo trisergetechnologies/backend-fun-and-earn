@@ -305,7 +305,7 @@ exports.requestWithdrawal = async (req, res) => {
     if (!bank || !bank.accountNumber || !bank.ifscCode || !bank.accountHolderName) {
       return res.status(200).json({
         success: false,
-        message: "Bank details missing. Please update your UPI or bank details.",
+        message: "Bank details missing. Please add your bank details.",
         data: null
       });
     }
@@ -325,7 +325,8 @@ exports.requestWithdrawal = async (req, res) => {
         accountHolderName: bank.accountHolderName,
         accountNumber: bank.accountNumber,
         ifscCode: bank.ifscCode,
-        upiId: bank.upiId || ""
+        upiId: bank.upiId || "",
+        panNumber: bank.panNumber || "",
       },
       status: "pending"
     });

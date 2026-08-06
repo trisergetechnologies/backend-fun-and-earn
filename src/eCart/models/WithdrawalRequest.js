@@ -39,7 +39,8 @@ const WithdrawalRequestSchema = new mongoose.Schema({
     accountHolderName: String,
     accountNumber: String,
     ifscCode: String,
-    upiId: String
+    upiId: String,
+    panNumber: String,
   },
 
   // Current status

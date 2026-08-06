@@ -18,7 +18,8 @@ const BankDetailsSchema = new mongoose.Schema({
   accountHolderName: String,
   accountNumber: String,
   ifscCode: String,
-  upiId: String
+  upiId: String,
+  panNumber: String,
 }, { _id: false });
 
 const SellerDetailsSchema = new mongoose.Schema({
