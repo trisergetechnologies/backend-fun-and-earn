@@ -93,5 +93,76 @@ describe('settings.controller.admin', () => {
         expect.objectContaining({ success: true })
       );
     });
+
+    it('rejects invalid Dream Mart ads fields', async () => {
+      const req = {
+        body: {
+          dreamMartAdsDailyInterstitialLimit: 0,
+          dreamMartAdsMinGapSeconds: 5,
+        },
+      };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateSettings(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false })
+      );
+      expect(Settings.findOne).not.toHaveBeenCalled();
+    });
+
+    it('accepts and saves valid Dream Mart ads fields', async () => {
+      const existing = {
+        _id: 's1',
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      Settings.findOne.mockResolvedValue(existing);
+
+      const req = {
+        body: {
+          dreamMartAdsDailyInterstitialLimit: 3,
+          dreamMartAdsMinGapSeconds: 90,
+          dreamMartAdsBannerEnabled: false,
+          dreamMartAdsBannerVisibleSecondsPerDay: 120,
+        },
+      };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateSettings(req, res);
+
+      expect(existing.dreamMartAdsDailyInterstitialLimit).toBe(3);
+      expect(existing.dreamMartAdsMinGapSeconds).toBe(90);
+      expect(existing.dreamMartAdsBannerEnabled).toBe(false);
+      expect(existing.dreamMartAdsBannerVisibleSecondsPerDay).toBe(120);
+      expect(existing.save).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true })
+      );
+    });
+
+    it('still accepts Reels ads fields independently', async () => {
+      const existing = {
+        _id: 's1',
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      Settings.findOne.mockResolvedValue(existing);
+
+      const req = {
+        body: {
+          adsDailyInterstitialLimit: 8,
+          adsBannerEnabled: false,
+        },
+      };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateSettings(req, res);
+
+      expect(existing.adsDailyInterstitialLimit).toBe(8);
+      expect(existing.adsBannerEnabled).toBe(false);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true })
+      );
+    });
   });
 });

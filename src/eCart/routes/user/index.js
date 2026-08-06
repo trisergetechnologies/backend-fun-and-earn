@@ -9,9 +9,11 @@ const userGeneralRouter = require('./general.routes.user');
 const userPaymentRouter = require('./payment.routes.user');
 const orangePGRouter = require('./orangepg.routes.user');
 const ccavenueRouter = require('./ccavenue.routes.user');
+const userAdsRouter = require('./ads.routes.user');
 
 const eCartUserRouter = Express.Router();
 
+eCartUserRouter.use('/ads', userAdsRouter);
 eCartUserRouter.use('/address', userAddressRouter);
 eCartUserRouter.use('/product', userProductRouter);
 eCartUserRouter.use('/cart', userCartRouter);

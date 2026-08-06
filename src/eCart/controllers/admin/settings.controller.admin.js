@@ -3,6 +3,10 @@ const {
   validateAdsSettingsUpdate,
   clampDailyLimit,
 } = require('../../../shortVideo/services/adsPolicy.service');
+const {
+  validateDreamMartAdsSettingsUpdate,
+  applyDreamMartAdsClamps,
+} = require('../../services/dreamMartAdsPolicy.service');
 
 exports.getSettings = async (req, res) => {
   try {
@@ -37,13 +41,19 @@ exports.updateSettings = async (req, res) => {
       'freeDeliveryAbove',
       'adsDailyInterstitialLimit',
       'adsBannerEnabled',
+      'dreamMartAdsDailyInterstitialLimit',
+      'dreamMartAdsMinGapSeconds',
+      'dreamMartAdsBannerEnabled',
+      'dreamMartAdsBannerVisibleSecondsPerDay',
     ];
 
     const adsErrors = validateAdsSettingsUpdate(req.body);
-    if (adsErrors.length > 0) {
+    const martAdsErrors = validateDreamMartAdsSettingsUpdate(req.body);
+    const allErrors = [...adsErrors, ...martAdsErrors];
+    if (allErrors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: adsErrors.join('; '),
+        message: allErrors.join('; '),
         data: null,
       });
     }
@@ -59,6 +69,7 @@ exports.updateSettings = async (req, res) => {
         updateData.adsDailyInterstitialLimit
       );
     }
+    applyDreamMartAdsClamps(updateData);
     updateData.updatedAt = Date.now();
 
     let settings = await Settings.findOne();

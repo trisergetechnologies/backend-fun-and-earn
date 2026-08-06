@@ -12,8 +12,14 @@ const SettingsSchema = new mongoose.Schema({
   },
   deliveryChargeAmount: { type: Number, default: 0 },
   freeDeliveryAbove: { type: Number, default: 500 },
+  /** Reels / Unity LevelPlay */
   adsDailyInterstitialLimit: { type: Number, default: 5 },
   adsBannerEnabled: { type: Boolean, default: true },
+  /** Dream Mart / AdMob */
+  dreamMartAdsDailyInterstitialLimit: { type: Number, default: 1 },
+  dreamMartAdsMinGapSeconds: { type: Number, default: 1800 },
+  dreamMartAdsBannerEnabled: { type: Boolean, default: true },
+  dreamMartAdsBannerVisibleSecondsPerDay: { type: Number, default: 600 },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedAt: { type: Date, default: Date.now }
 });
