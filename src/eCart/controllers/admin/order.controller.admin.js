@@ -3,6 +3,10 @@ const ExcelJS = require('exceljs');
 const Order = require('../../models/Order');
 const generateCouponForOrder = require('../../helpers/generateCoupon');
 const {
+  generateInvoicePdf,
+  isInvoiceEligible,
+} = require('../../helpers/generateInvoicePdf');
+const {
   getIstTodayRange,
   getIstMonthRange,
   getIstDayRange,
@@ -41,6 +45,58 @@ function buildOrderReportFilename(periodPart) {
   const safe = String(periodPart).replace(/[<>:"/\\|?*\x00-\x1f]/g, '');
   return `order-report-${safe}_${stamp}.xlsx`;
 }
+
+// Get / generate invoice PDF URL (paid + non-cancelled only)
+exports.getOrderInvoice = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(200).json({
+        success: false,
+        message: 'Invalid order ID',
+        data: null,
+      });
+    }
+
+    const order = await Order.findById(orderId)
+      .populate('items.productId')
+      .populate('buyerId');
+
+    if (!order) {
+      return res.status(200).json({
+        success: false,
+        message: 'Order not found',
+        data: null,
+      });
+    }
+
+    if (!isInvoiceEligible(order)) {
+      return res.status(200).json({
+        success: false,
+        message: 'Invoice available only for paid, non-cancelled orders',
+        data: null,
+      });
+    }
+
+    const { publicUrl, cached } = await generateInvoicePdf(order, {
+      host: req.get('host'),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: cached ? 'Invoice ready' : 'Invoice generated',
+      url: publicUrl,
+    });
+  } catch (err) {
+    console.error('getOrderInvoice Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate invoice',
+      data: null,
+    });
+  }
+};
 
 // 1. Get Orders
 exports.getOrders = async (req, res) => {
