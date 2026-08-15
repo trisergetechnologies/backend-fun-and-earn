@@ -45,7 +45,20 @@ exports.updateSettings = async (req, res) => {
       'dreamMartAdsMinGapSeconds',
       'dreamMartAdsBannerEnabled',
       'dreamMartAdsBannerVisibleSecondsPerDay',
+      'paymentGateway',
     ];
+
+    if (req.body.paymentGateway !== undefined) {
+      const gateway = String(req.body.paymentGateway).toLowerCase().trim();
+      if (gateway !== 'ccavenue' && gateway !== 'razorpay') {
+        return res.status(400).json({
+          success: false,
+          message: 'paymentGateway must be ccavenue or razorpay',
+          data: null,
+        });
+      }
+      req.body.paymentGateway = gateway;
+    }
 
     const adsErrors = validateAdsSettingsUpdate(req.body);
     const martAdsErrors = validateDreamMartAdsSettingsUpdate(req.body);

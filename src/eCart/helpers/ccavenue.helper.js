@@ -139,10 +139,16 @@ function generateCcavenueOrderId(paymentIntentId) {
   return `${Date.now().toString().slice(-6)}${suffix}`.slice(0, 20);
 }
 
-/** Client-requested gateway; defaults to razorpay when omitted (old app builds). */
+/** Admin / API gateway value. Unknown values fall back to ccavenue. */
 function normalizePaymentGateway(gateway) {
-  const value = String(gateway ?? 'razorpay').toLowerCase().trim();
-  return value === 'ccavenue' ? 'ccavenue' : 'razorpay';
+  const value = String(gateway ?? 'ccavenue').toLowerCase().trim();
+  return value === 'razorpay' ? 'razorpay' : 'ccavenue';
+}
+
+async function getActivePaymentGateway() {
+  const Settings = require('../../../models/Settings');
+  const settings = await Settings.findOne().lean();
+  return normalizePaymentGateway(settings?.paymentGateway);
 }
 
 function isCcavenueGateway(gateway) {
@@ -178,6 +184,7 @@ module.exports = {
   buildPaymentPageUrl,
   generateCcavenueOrderId,
   normalizePaymentGateway,
+  getActivePaymentGateway,
   isCcavenueGateway,
   isCcavenueEnabled,
   assertCcavenueConfig

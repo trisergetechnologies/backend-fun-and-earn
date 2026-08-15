@@ -3,8 +3,8 @@ const WalletTransaction = require("../../../models/WalletTransaction");
 const EarningLog = require("../../models/EarningLog");
 const mongoose = require('mongoose');
 
-// 10 hours = 36000 seconds
-const WATCH_TIME_THRESHOLD = 10 * 3600;
+// 150 minutes = 9000 seconds
+const WATCH_TIME_THRESHOLD = 150 * 60;
 
 exports.getUsersWithWatchTime = async (req, res) => {
   try {
@@ -20,7 +20,7 @@ exports.getUsersWithWatchTime = async (req, res) => {
       if (!user) {
         return res.status(200).json({
           success: false,
-          message: 'User not found or watch time below 10 hours',
+          message: 'User not found or watch time below 150 minutes',
           data: null
         });
       }
@@ -59,7 +59,7 @@ exports.getUsersWithWatchTime = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Users with watch time >= 10 hours fetched successfully',
+      message: 'Users with watch time >= 150 minutes fetched successfully',
       data: users,
       pagination: { page: pageNum, limit: limitNum, total, totalPages }
     });
@@ -116,7 +116,7 @@ exports.creditWatchTimeEarnings = async (req, res) => {
           source: 'watchTime', // ✅ make sure enum updated
           fromUser: user._id,  // self, since watch time is their own effort
           triggeredBy: 'admin',
-          notes: `Credited watch time earnings after 10+ hours`,
+          notes: `Credited watch time earnings after 150+ minutes`,
           status: 'success'
         }).save();
 
@@ -154,7 +154,7 @@ exports.creditWatchTimeEarnings = async (req, res) => {
     if (!user) {
       return res.status(200).json({
         success: false,
-        message: 'User not found or watch time below 10 hours',
+        message: 'User not found or watch time below 150 minutes',
         data: null
       });
     }
@@ -170,7 +170,7 @@ exports.creditWatchTimeEarnings = async (req, res) => {
       source: 'watchTime',
       fromUser: user._id,
       triggeredBy: 'admin',
-      notes: `Credited watch time earnings after 10+ hours`,
+      notes: `Credited watch time earnings after 150+ minutes`,
       status: 'success'
     }).save();
 

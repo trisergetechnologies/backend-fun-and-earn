@@ -19,16 +19,12 @@ const orderController = fs.readFileSync(
   path.join(__dirname, '../src/eCart/controllers/user/order.controller.user.js'),
   'utf8'
 );
-if (!orderController.includes('normalizePaymentGateway')) {
-  console.error('FAIL: per-request payment gateway resolver missing');
+if (!orderController.includes('getActivePaymentGateway')) {
+  console.error('FAIL: admin settings payment gateway resolver missing');
   process.exit(1);
 }
 if (!orderController.includes('isCcavenueGateway')) {
   console.error('FAIL: ccavenue branch missing in order controller');
-  process.exit(1);
-}
-if (!orderController.includes("paymentGateway")) {
-  console.error('FAIL: createOrderIntent should read paymentGateway from request body');
   process.exit(1);
 }
 
@@ -46,5 +42,5 @@ if (!routes.includes('/public/ccavenue/callback')) {
 
 console.log('PASS: payment gateway regression checks');
 console.log('  packageBuyCron: gateway-agnostic (paymentStatus=paid only)');
-console.log('  order controller: per-request gateway (razorpay default) + ccavenue branch');
+console.log('  order controller: admin Settings.paymentGateway + ccavenue branch');
 console.log('  public callback routes registered');

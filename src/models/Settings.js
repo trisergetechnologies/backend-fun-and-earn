@@ -20,6 +20,12 @@ const SettingsSchema = new mongoose.Schema({
   dreamMartAdsMinGapSeconds: { type: Number, default: 1800 },
   dreamMartAdsBannerEnabled: { type: Boolean, default: true },
   dreamMartAdsBannerVisibleSecondsPerDay: { type: Number, default: 600 },
+  /** Dream Mart checkout: ccavenue | razorpay (admin-controlled). */
+  paymentGateway: {
+    type: String,
+    enum: ['ccavenue', 'razorpay'],
+    default: 'ccavenue'
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedAt: { type: Date, default: Date.now }
 });

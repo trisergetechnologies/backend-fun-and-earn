@@ -141,6 +141,32 @@ describe('settings.controller.admin', () => {
       );
     });
 
+    it('accepts paymentGateway ccavenue or razorpay', async () => {
+      const existing = {
+        _id: 's1',
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      Settings.findOne.mockResolvedValue(existing);
+
+      const req = { body: { paymentGateway: 'razorpay' } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateSettings(req, res);
+
+      expect(existing.paymentGateway).toBe('razorpay');
+      expect(existing.save).toHaveBeenCalled();
+    });
+
+    it('rejects invalid paymentGateway', async () => {
+      const req = { body: { paymentGateway: 'paypal' } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await updateSettings(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(Settings.findOne).not.toHaveBeenCalled();
+    });
+
     it('still accepts Reels ads fields independently', async () => {
       const existing = {
         _id: 's1',

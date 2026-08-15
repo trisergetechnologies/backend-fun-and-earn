@@ -268,3 +268,22 @@ exports.getUserProfile = async (req, res) => {
     });
   }
 };
+
+exports.getPaymentGateway = async (req, res) => {
+  try {
+    const { getActivePaymentGateway } = require('../../helpers/ccavenue.helper');
+    const paymentGateway = await getActivePaymentGateway();
+    return res.status(200).json({
+      success: true,
+      message: 'Payment gateway fetched successfully',
+      data: { paymentGateway }
+    });
+  } catch (err) {
+    console.error('Get Payment Gateway Error:', err);
+    return res.status(200).json({
+      success: false,
+      message: 'Internal Server Error',
+      data: { paymentGateway: 'ccavenue' }
+    });
+  }
+};

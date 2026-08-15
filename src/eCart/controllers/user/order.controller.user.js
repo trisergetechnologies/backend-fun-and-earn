@@ -11,7 +11,7 @@ const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
 const PaymentIntent = require('../../models/PaymentIntent');
 const { generateInvoicePdf } = require('../../helpers/generateInvoicePdf');
 const {
-  normalizePaymentGateway,
+  getActivePaymentGateway,
   isCcavenueGateway,
   assertCcavenueConfig,
   buildOrderParams,
@@ -204,8 +204,8 @@ function msFromNow(minutes) {
 
 exports.createOrderIntent = async (req, res) => {
   const user = req.user;
-  const { useWallet = false, deliverySlug, idempotencyKey, paymentGateway } = req.body;
-  const requestedGateway = normalizePaymentGateway(paymentGateway);
+  const { useWallet = false, deliverySlug, idempotencyKey } = req.body;
+  const requestedGateway = await getActivePaymentGateway();
 
   if (!deliverySlug) {
     return res.status(200).json({ success: false, message: 'deliverySlug is required' });
