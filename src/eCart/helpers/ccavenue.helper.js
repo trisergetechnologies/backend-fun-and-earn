@@ -146,7 +146,7 @@ function normalizePaymentGateway(gateway) {
 }
 
 async function getActivePaymentGateway() {
-  const Settings = require('../../../models/Settings');
+  const Settings = require('../../models/Settings');
   const settings = await Settings.findOne().lean();
   return normalizePaymentGateway(settings?.paymentGateway);
 }
