@@ -1,6 +1,7 @@
 const WalletTransaction = require("../../../models/WalletTransaction");
 const WithdrawalRequest = require("../../models/WithdrawalRequest");
 const User = require("../../../models/User");
+const mongoose = require("mongoose");
 
 
 
@@ -230,5 +231,125 @@ exports.getWithdrawalRequests = async (req, res) => {
       message: "Internal Server Error",
       error: err.message,
     });
+  }
+};
+
+/**
+ * Admin recharge Dream Mart (eCart) wallet — same pattern as shortVideo wallet recharge.
+ */
+exports.rechargeECartWallet = async (req, res) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== "admin") {
+      return res.status(200).json({ success: false, message: "Unauthorized", data: null });
+    }
+
+    const { userId, amount } = req.body;
+    const amt = Number(amount);
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(200).json({ success: false, message: "Invalid or missing user ID", data: null });
+    }
+    if (!Number.isFinite(amt) || amt <= 0) {
+      return res.status(200).json({ success: false, message: "Invalid amount", data: null });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ success: false, message: "User not found", data: null });
+    }
+
+    if (!user.wallets) user.wallets = {};
+    user.wallets.eCartWallet = round2((user.wallets.eCartWallet || 0) + amt);
+    await user.save();
+
+    await WalletTransaction.create({
+      userId: user._id,
+      type: "earn",
+      fromWallet: "eCartWallet",
+      toWallet: "eCartWallet",
+      source: "admin",
+      amount: amt,
+      status: "success",
+      triggeredBy: "admin",
+      notes: `Admin Dream Mart recharge by ${admin.name}`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Dream Mart wallet recharged with ₹${amt}`,
+      data: {
+        userId: user._id,
+        name: user.name,
+        newBalance: user.wallets.eCartWallet,
+      },
+    });
+  } catch (err) {
+    console.error("Admin eCart Recharge Error:", err);
+    return res.status(500).json({ success: false, message: "Internal Server Error", data: null });
+  }
+};
+
+/**
+ * Admin deduct from Dream Mart (eCart) wallet.
+ */
+exports.deductECartWallet = async (req, res) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== "admin") {
+      return res.status(200).json({ success: false, message: "Unauthorized", data: null });
+    }
+
+    const { userId, amount } = req.body;
+    const amt = Number(amount);
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(200).json({ success: false, message: "Invalid or missing user ID", data: null });
+    }
+    if (!Number.isFinite(amt) || amt <= 0) {
+      return res.status(200).json({ success: false, message: "Invalid amount", data: null });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ success: false, message: "User not found", data: null });
+    }
+
+    const currentBalance = user.wallets?.eCartWallet || 0;
+    if (currentBalance < amt) {
+      return res.status(200).json({
+        success: false,
+        message: `Insufficient balance. Available: ₹${round2(currentBalance).toFixed(2)}`,
+        data: null,
+      });
+    }
+
+    user.wallets.eCartWallet = round2(Math.max(0, currentBalance - amt));
+    await user.save();
+
+    await WalletTransaction.create({
+      userId: user._id,
+      type: "spend",
+      fromWallet: "eCartWallet",
+      toWallet: null,
+      source: "admin",
+      amount: amt,
+      status: "success",
+      triggeredBy: "admin",
+      notes: `Admin Dream Mart deduction by ${admin.name}`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `₹${amt} deducted from Dream Mart wallet`,
+      data: {
+        userId: user._id,
+        name: user.name,
+        newBalance: user.wallets.eCartWallet,
+      },
+    });
+  } catch (err) {
+    console.error("Admin eCart Deduct Error:", err);
+    return res.status(500).json({ success: false, message: "Internal Server Error", data: null });
   }
 };

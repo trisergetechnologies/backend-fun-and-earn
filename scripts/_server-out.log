@@ -1,0 +1,24 @@
+[CCAvenue] config {"CCAVENUE_ENV":"live","BACKEND_URL":"http://localhost:5000/api/v1","callbackUrls":{"redirectUrl":"http://localhost:5000/api/v1/public/ccavenue/callback","cancelUrl":"http://localhost:5000/api/v1/public/ccavenue/cancel"},"FRONTEND_URL":"dreammart://"}
+walletTransfer loaded
+🔥 reconcileRazorpayPayments loaded
+reconcileRazorpayPayments loaded
+expireCcavenuePayments loaded
+🔥 [PACKAGE_BUY_CRON] file loaded at 2026-09-11T19:35:41.713Z
+packageBuyCron loaded
+[VIDEO_RETENTION_CRON] loaded at 2026-09-11T19:35:41.719Z
+videoRetentionCron loaded
+✅ MongoDB connected to: 127.0.0.1
+📚 Swagger docs at http://localhost:PORT/api-docs
+Server running on port 5000
+cwd=C:\Users\vaibh_ew6j6\Saved Games\Hello\backend-fun-and-earn
+Dream Mart admin wallet routes: PUT /shortvideo/admin/rechargeecartwallet|deductecartwallet
+BACKEND_URL=http://localhost:5000/api/v1
+CCAvenue callback=http://localhost:5000/api/v1/public/ccavenue/callback
+CCAvenue cancel=http://localhost:5000/api/v1/public/ccavenue/cancel
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789155360030',
+  time: '2026-09-11T19:36:00.030Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789155360030', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789155360030' }

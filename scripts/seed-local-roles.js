@@ -52,9 +52,9 @@ const ACCOUNTS = {
   user: {
     email: 'user@local.test',
     phone: '919911110003',
-    name: 'Local Test User',
+    name: 'Priya Sharma',
     role: 'user',
-    gender: 'male',
+    gender: 'female',
     applications: ['eCart'],
     state_address: 'Karnataka',
     referralCode: 'locusr01',
@@ -112,6 +112,7 @@ async function seed() {
   const user = await User.create({
     ...baseUser,
     ...ACCOUNTS.user,
+    serialNumber: 1001,
     eCartProfile: {
       addresses: [
         {
@@ -129,7 +130,7 @@ async function seed() {
       orders: [],
       bankDetails: null,
     },
-    wallets: { shortVideoWallet: 0, eCartWallet: 50, rewardWallet: [] },
+    wallets: { shortVideoWallet: 0, eCartWallet: 50000, rewardWallet: [] },
   });
 
   await Settings.create({
@@ -206,6 +207,10 @@ async function seed() {
   console.log('  seller:   ', seller._id.toString());
   console.log('  user:     ', user._id.toString());
   console.log('  category: ', category._id.toString());
+
+  // First Auto Pool user = local user (manual bootstrap); others join via their SN
+  const { seedAutopoolLocal } = require('./seed-autopool-local');
+  await seedAutopoolLocal();
 }
 
 seed()

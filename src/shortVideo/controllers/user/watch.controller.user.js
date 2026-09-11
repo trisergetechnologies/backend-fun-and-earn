@@ -13,6 +13,11 @@ exports.getFeed = async (req, res) => {
     // Step 1: Get total count of active videos
     const total = await Video.countDocuments({ isActive: true });
 
+    // $sample requires a positive integer — empty catalog would crash with size 0
+    if (total <= 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
     // Step 2: Use aggregation to get random paginated results
     const videos = await Video.aggregate([
       { $match: { isActive: true } },

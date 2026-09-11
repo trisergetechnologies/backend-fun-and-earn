@@ -9,8 +9,14 @@ const User = require('../models/User');
 const Package = require('../models/Package');
 const Product = require('../eCart/models/Product');
 
-// Replace with your actual internal API base URL
-const INTERNAL_API_BASE = 'https://amp-api.mpdreams.in/api/v1/shortvideo/user/package/purchasepackageinternal'
+// Uses BACKEND_URL from .env (local: http://localhost:5000/api/v1)
+function getInternalPackagePurchaseUrl() {
+  const base = (process.env.BACKEND_URL || 'http://localhost:5000/api/v1').replace(
+    /\/$/,
+    ''
+  );
+  return `${base}/shortvideo/user/package/purchasepackageinternal`;
+}
 
 cron.schedule('*/6 * * * *', async () => {
   const runId = `${CRON_NAME}_${Date.now()}`;
@@ -200,7 +206,7 @@ async function processOrder(order, runId) {
     });
 
     const token = buyer.token;
-    await axios.post(`${INTERNAL_API_BASE}`, {
+    await axios.post(`${getInternalPackagePurchaseUrl()}`, {
       packageId: bestPackage._id,
       orderId: order._id
     }, {headers: {Authorization: `Bearer ${token}`}});

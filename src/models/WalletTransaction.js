@@ -17,7 +17,7 @@ const WalletTransactionSchema = new mongoose.Schema({
   // What caused this transaction
   source: {
     type: String,
-    enum: ['watchTime','system', 'purchase', 'manual', 'admin', "coupon"],
+    enum: ['watchTime','system', 'purchase', 'manual', 'admin', 'coupon', 'autopool'],
     required: true
   },
 

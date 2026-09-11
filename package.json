@@ -5,8 +5,12 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --no-cache --forceExit",
+    "test:autopool-e2e": "node scripts/autopool-e2e/run.js",
     "start": "node ./src/server.js",
+    "dev": "node ./src/server.js",
     "db:seed:local": "node scripts/seed-local-roles.js",
+    "db:seed:autopool": "node scripts/seed-autopool-local.js",
+    "db:seed:shortvideo": "node scripts/seed-shortvideo-user.js",
     "db:ensure-indexes": "node scripts/ensureIndexes.js",
     "db:ensure-indexes:backfill": "node scripts/ensureIndexes.js --backfill"
   },

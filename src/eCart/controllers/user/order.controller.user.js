@@ -533,7 +533,8 @@ exports.createOrderIntent = async (req, res) => {
       try {
 
         const shortOrderId = orderDoc._id.toString().slice(-8); // last 8 chars only
-        const callbackUrl = `https://amp-api.mpdreams.in/api/v1/payment/razorpay-redirect?intent=${paymentIntentDoc._id}`;
+        const apiBase = (BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '');
+        const callbackUrl = `${apiBase}/payment/razorpay-redirect?intent=${paymentIntentDoc._id}`;
         
         const razorpayOrder = await razorpay.orders.create({
           amount: Math.round(remaining * 100), // paise

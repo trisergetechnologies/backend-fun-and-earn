@@ -7,6 +7,7 @@ const authRouter = require('./auth.routes');
 //eCart router import
 const eCartRouter = require('../eCart/routes');
 const shortVideoRouter = require('../shortVideo/routes');
+const autopoolRouter = require('../autopool/routes');
 const { handleOrangeCallback, handlePaymentAdvice } = require('../eCart/controllers/user/orangepg.controller.user');
 const { handleCcavenueCallback, handleCcavenueCancel } = require('../eCart/controllers/user/ccavenue.controller.user');
 
@@ -26,6 +27,7 @@ router.use('/auth', authRouter);
 //eCart Routes
 router.use('/ecart', eCartRouter);
 router.use('/shortvideo', shortVideoRouter);
+router.use('/autopool', autopoolRouter);
 
 // Orange PG payment callback (Form POST from Orange PG after payment)
 router.post('/public/orange/callback', handleOrangeCallback);

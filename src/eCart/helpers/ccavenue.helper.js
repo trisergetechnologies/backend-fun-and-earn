@@ -5,7 +5,7 @@ const CCAVENUE_MERCHANT_ID = process.env.CCAVENUE_MERCHANT_ID;
 const CCAVENUE_ACCESS_CODE = process.env.CCAVENUE_ACCESS_CODE;
 const CCAVENUE_WORKING_KEY = process.env.CCAVENUE_WORKING_KEY;
 const CCAVENUE_ENV = (process.env.CCAVENUE_ENV || 'live').toLowerCase();
-const BACKEND_URL = (process.env.BACKEND_URL || 'https://amp-api.mpdreams.in/api/v1').replace(/\/$/, '');
+const BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '');
 const CCAVENUE_LIVE_URL = 'https://secure.ccavenue.com/transaction/transaction.do?command=initiateTransaction';
 const CCAVENUE_TEST_URL = 'https://test.ccavenue.com/transaction/transaction.do?command=initiateTransaction';
 

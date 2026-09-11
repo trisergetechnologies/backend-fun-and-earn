@@ -18,8 +18,8 @@ const {
   verifyOrangeHash
 } = require('../../helpers/orangePG.helper');
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://amp-api.mpdreams.in/api/v1';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'exp://192.168.1.100:8081'; // Expo deep link
+const BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '');
+const FRONTEND_URL = process.env.FRONTEND_URL || 'dreammart://'; // Expo deep link
 
 /**
  * @route POST /api/v1/ecart/user/payment/orange/initiate
