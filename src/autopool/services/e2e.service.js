@@ -293,8 +293,12 @@ async function placeFillerInPool({ userId, poolLevel }) {
 }
 
 /**
- * Advance a subject's cycleCount to target by placing leaf fillers,
- * sealing any other open seats in that pool so FIFO cannot starve them.
+ * Advance a subject's cycleCount to target by placing leaf fillers.
+ * Seals other users' open seats so FIFO prefers the subject's open child seats.
+ * After each cycle the subject re-enters as a FIFO filler (may briefly sit under a
+ * filler); the next loop seals non-subject seats again so the following pair of
+ * fillers land under the subject.
+ * Dev / AUTOPOOL_E2E_ALLOW only — never point at production.
  */
 async function advanceCycles({ userId, poolLevel, targetCycleCount }) {
   assertE2eAllowed();
@@ -313,11 +317,11 @@ async function advanceCycles({ userId, poolLevel, targetCycleCount }) {
   }
 
   let guard = 0;
-  const maxGuard = Math.max(target * 4, 20);
+  const maxGuard = Math.max(target * 8, 40);
   while ((participation.cycleCount || 0) < target && guard < maxGuard) {
     guard += 1;
 
-    // Only this user's open seats may receive fillers
+    // Prefer this user's open seats; seal everyone else (incl. fillers they sat under)
     await AutopoolPlacement.updateMany(
       {
         poolLevel: level,
@@ -326,6 +330,45 @@ async function advanceCycles({ userId, poolLevel, targetCycleCount }) {
       },
       { $set: { openSlots: 0 } }
     );
+
+    // Ensure subject has an open parent seat (root fallback if sealed/starved)
+    const subjectOpen = await AutopoolPlacement.findOne({
+      poolLevel: level,
+      participationId: participation._id,
+      openSlots: { $gt: 0 },
+      status: { $in: ['PLACED', 'WAITING'] },
+    });
+    if (!subjectOpen) {
+      // Subject may have re-entered under someone with no open seats left on self —
+      // create a dedicated open seat by placing under self-root fallback is via
+      // sealing all and letting next filler create... better: open slots on latest placement
+      const latest = await AutopoolPlacement.findOne({
+        poolLevel: level,
+        participationId: participation._id,
+      }).sort({ queueSequence: -1 });
+      if (latest && latest.status !== 'CYCLE_DONE') {
+        latest.openSlots = Math.max(latest.openSlots || 0, 2);
+        latest.status = latest.status === 'WAITING' ? 'WAITING' : 'PLACED';
+        await latest.save();
+      } else if (latest && latest.status === 'CYCLE_DONE') {
+        // Force a placeable root seat for e2e only
+        const seq =
+          ((await AutopoolPlacement.findOne({ poolLevel: level })
+            .sort({ queueSequence: -1 })
+            .select('queueSequence'))?.queueSequence || 0) + 1;
+        await AutopoolPlacement.create({
+          poolLevel: level,
+          participationId: participation._id,
+          userId,
+          parentParticipationId: null,
+          slot: 'root',
+          status: 'PLACED',
+          queueSequence: seq,
+          openSlots: 2,
+          filledAt: new Date(),
+        });
+      }
+    }
 
     const before = participation.cycleCount || 0;
     for (let i = 0; i < 2; i++) {
@@ -338,7 +381,6 @@ async function advanceCycles({ userId, poolLevel, targetCycleCount }) {
 
     participation = await AutopoolParticipation.findById(participation._id);
     if ((participation.cycleCount || 0) === before) {
-      // No progress — likely no open seat for subject (waiting for re-queue)
       continue;
     }
   }

@@ -21,29 +21,41 @@ async function nextQueueSequence(poolLevel, session) {
 }
 
 /**
- * Place a participation into poolLevel FIFO matrix.
- * Returns { placement, completedParentCycle? }
+ * Claim oldest open parent seat (FIFO), excluding the seeker's own participation seats.
  */
-async function placeParticipation({ participation, session }) {
-  const poolLevel = participation.poolLevel;
-  const queueSequence = await nextQueueSequence(poolLevel, session);
-
-  // Find oldest parent with openSlots > 0
-  const parent = await AutopoolPlacement.findOneAndUpdate(
-    {
-      poolLevel,
-      status: { $in: ['PLACED', 'WAITING'] },
-      openSlots: { $gt: 0 },
-    },
+async function claimOpenParent({ poolLevel, seekerParticipationId, session }) {
+  const filter = {
+    poolLevel,
+    status: { $in: ['PLACED', 'WAITING'] },
+    openSlots: { $gt: 0 },
+    participationId: { $ne: seekerParticipationId },
+  };
+  return AutopoolPlacement.findOneAndUpdate(
+    filter,
     { $inc: { openSlots: -1 } },
     { sort: { queueSequence: 1 }, new: true, session }
   );
+}
+
+/**
+ * Place one participation into one matrix seat (no continuation cascade).
+ * Returns { placement, cycleResult } where cycleResult may include reenterParticipationId.
+ */
+async function placeOne({ participation, session }) {
+  const poolLevel = participation.poolLevel;
+  const queueSequence = await nextQueueSequence(poolLevel, session);
+
+  const parent = await claimOpenParent({
+    poolLevel,
+    seekerParticipationId: participation._id,
+    session,
+  });
 
   let slot = 'root';
   let parentParticipationId = null;
 
   if (!parent) {
-    // First in pool — root
+    // Alone / no open child seats — root (parent seat with open slots)
     const [placement] = await AutopoolPlacement.create(
       [
         {
@@ -69,7 +81,6 @@ async function placeParticipation({ participation, session }) {
     return { placement, cycleResult: null };
   }
 
-  // Attach as left or right child
   parentParticipationId = parent.participationId;
   if (!parent.leftChildParticipationId) {
     slot = 'left';
@@ -78,7 +89,6 @@ async function placeParticipation({ participation, session }) {
     slot = 'right';
     parent.rightChildParticipationId = participation._id;
   } else {
-    // Race: openSlots was wrong — rethrow by restoring and finding another
     parent.openSlots += 1;
     await parent.save({ session });
     const err = new Error('Placement race — retry');
@@ -123,6 +133,38 @@ async function placeParticipation({ participation, session }) {
   return { placement, cycleResult };
 }
 
+/**
+ * Place a participation into poolLevel FIFO matrix.
+ * After a cycle, same-pool continuation re-enters as a child (filler), with cascade via queue.
+ */
+async function placeParticipation({ participation, session }) {
+  const pending = [participation._id.toString()];
+  let last = null;
+  let guard = 0;
+  const maxGuard = 64;
+
+  while (pending.length && guard < maxGuard) {
+    guard += 1;
+    const id = pending.shift();
+    const part = await AutopoolParticipation.findById(id).session(session);
+    if (!part) continue;
+
+    last = await placeOne({ participation: part, session });
+    const reenterId = last?.cycleResult?.reenterParticipationId;
+    if (reenterId) {
+      pending.push(String(reenterId));
+    }
+  }
+
+  if (pending.length) {
+    const err = new Error('Placement cascade exceeded guard — possible loop');
+    err.code = 'PLACEMENT_CASCADE_OVERFLOW';
+    throw err;
+  }
+
+  return last;
+}
+
 async function completeCycleForParent({ parentPlacement, session }) {
   const parentParticipation = await AutopoolParticipation.findById(
     parentPlacement.participationId
@@ -141,7 +183,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
   const idempotencyKey = `cycle-distribution:${parentParticipation._id}:${nextCycleNumber}`;
   const existing = await AutopoolCycle.findOne({ idempotencyKey }).session(session);
   if (existing) {
-    return { cycle: existing, alreadyProcessed: true };
+    return { cycle: existing, alreadyProcessed: true, reenterParticipationId: null };
   }
 
   const dist = computeCycleDistribution({
@@ -170,7 +212,6 @@ async function completeCycleForParent({ parentPlacement, session }) {
     { session }
   );
 
-  // Wallet reward
   if (dist.walletAmount > 0) {
     await creditEcartForAutopool({
       userId: parentParticipation.userId,
@@ -184,7 +225,6 @@ async function completeCycleForParent({ parentPlacement, session }) {
     });
   }
 
-  // System balances
   const balances = await ensureSystemBalances(session);
   if (dist.adminAmount > 0) {
     balances.adminAllocation += dist.adminAmount;
@@ -224,7 +264,6 @@ async function completeCycleForParent({ parentPlacement, session }) {
   }
   await balances.save({ session });
 
-  // Next-pool reserve accumulation (cycles 1–5)
   if (dist.nextPoolAmount > 0) {
     parentParticipation.nextPoolEligibleAmount =
       (parentParticipation.nextPoolEligibleAmount || 0) + dist.nextPoolAmount;
@@ -245,7 +284,6 @@ async function completeCycleForParent({ parentPlacement, session }) {
     );
   }
 
-  // Eligibility at cycle 5
   if (dist.createsEligibility) {
     const targetLevel = parentParticipation.poolLevel + 1;
     const targetConfig = await getPoolConfig(targetLevel, session);
@@ -280,7 +318,9 @@ async function completeCycleForParent({ parentPlacement, session }) {
     }
   }
 
-  // Same-pool continuation: re-queue parent for next cycle seats (new placement row with open slots)
+  let reenterParticipationId = null;
+
+  // Same-pool continuation: FIFO child-slot re-entry (classic filler model)
   if (!dist.isFinalCycle && dist.samePoolAmount > 0) {
     await AutopoolLedger.create(
       [
@@ -297,31 +337,11 @@ async function completeCycleForParent({ parentPlacement, session }) {
       ],
       { session }
     );
-
-    // New waiting placement for next cycle (same participation, new open slots)
-    const seq = await nextQueueSequence(parentParticipation.poolLevel, session);
-    await AutopoolPlacement.create(
-      [
-        {
-          poolLevel: parentParticipation.poolLevel,
-          participationId: parentParticipation._id,
-          userId: parentParticipation.userId,
-          parentParticipationId: null,
-          slot: 'root',
-          status: 'WAITING',
-          queueSequence: seq,
-          openSlots: 2,
-          leftChildParticipationId: null,
-          rightChildParticipationId: null,
-        },
-      ],
-      { session }
-    );
+    reenterParticipationId = parentParticipation._id;
   }
 
   await parentParticipation.save({ session });
 
-  // Pool 10 credit reset
   if (dist.isFinalCycle && parentParticipation.poolLevel === 10) {
     await maybeResetCreditsAfterPool10({
       userId: parentParticipation.userId,
@@ -330,11 +350,71 @@ async function completeCycleForParent({ parentPlacement, session }) {
     });
   }
 
-  return { cycle, alreadyProcessed: false, distribution: dist };
+  return {
+    cycle,
+    alreadyProcessed: false,
+    distribution: dist,
+    reenterParticipationId,
+  };
+}
+
+/**
+ * Re-enter an occupying participation as FIFO filler (migration + manual repair).
+ * Closes orphan WAITING root continuation seats for this participation first.
+ */
+async function reenterParticipationAsFiller({ participationId, session }) {
+  const ownSession = !session;
+  if (ownSession) {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  }
+  try {
+    await AutopoolPlacement.updateMany(
+      {
+        participationId,
+        status: 'WAITING',
+        parentParticipationId: null,
+        openSlots: { $gt: 0 },
+      },
+      { $set: { openSlots: 0, status: 'CYCLE_DONE' } },
+      { session }
+    );
+
+    const participation = await AutopoolParticipation.findById(participationId).session(
+      session
+    );
+    if (!participation) {
+      const err = new Error('Participation not found');
+      err.code = 'NO_PARTICIPATION';
+      throw err;
+    }
+    if (participation.releasedAt) {
+      const err = new Error('Participation already released');
+      err.code = 'ALREADY_RELEASED';
+      throw err;
+    }
+
+    const result = await placeParticipation({ participation, session });
+
+    if (ownSession) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+    return result;
+  } catch (err) {
+    if (ownSession) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    throw err;
+  }
 }
 
 module.exports = {
   placeParticipation,
+  placeOne,
   completeCycleForParent,
   nextQueueSequence,
+  claimOpenParent,
+  reenterParticipationAsFiller,
 };
