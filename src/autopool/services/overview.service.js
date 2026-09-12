@@ -199,7 +199,7 @@ async function getPoolDetail(userId, poolLevel) {
     nextPoolTarget,
     joinsNeeded,
     isLastCycle,
-    entryAmount: currentCfg?.entryAmount || 500,
+    entryAmount: currentCfg?.entryAmount || 1000,
   };
 }
 

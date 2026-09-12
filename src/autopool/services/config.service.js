@@ -67,9 +67,11 @@ async function seedPoolConfigs(session) {
     await AutopoolPoolConfig.findOneAndUpdate(
       { poolLevel: p.poolLevel },
       {
+        $set: {
+          entryAmount: p.entryAmount,
+        },
         $setOnInsert: {
           poolLevel: p.poolLevel,
-          entryAmount: p.entryAmount,
           collectionMultiplier: 2,
           maxCycles: 15,
           distribution: { ...DEFAULT_DISTRIBUTION },

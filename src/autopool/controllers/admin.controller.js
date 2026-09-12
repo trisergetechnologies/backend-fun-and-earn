@@ -534,7 +534,7 @@ exports.getParticipationJourney = async (req, res) => {
     }
 
     const estimatedCycleReward = Math.round(
-      ((participation.configSnapshot?.entryAmount || 500) *
+      ((participation.configSnapshot?.entryAmount || 1000) *
         (participation.configSnapshot?.collectionMultiplier || 2) *
         (participation.configSnapshot?.walletPercent || 20)) /
         100
