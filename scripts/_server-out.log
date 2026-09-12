@@ -703,3 +703,45 @@ CCAvenue cancel=http://localhost:5000/api/v1/public/ccavenue/cancel
 }
 📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789209000038', count: 0 }
 ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789209000038' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789209360017',
+  time: '2026-09-12T10:36:00.017Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789209360017', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789209360017' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789209720030',
+  time: '2026-09-12T10:42:00.030Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789209720030', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789209720030' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789210080027',
+  time: '2026-09-12T10:48:00.028Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789210080027', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789210080027' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789210440028',
+  time: '2026-09-12T10:54:00.028Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789210440028', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789210440028' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789210800017',
+  time: '2026-09-12T11:00:00.017Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789210800017', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789210800017' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789211160024',
+  time: '2026-09-12T11:06:00.024Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789211160024', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789211160024' }

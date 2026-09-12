@@ -16,24 +16,32 @@ async function getOverview(userId) {
   const settings = await ensureSettings();
   const enabled = Boolean(settings.enabled);
 
-  const creditBalance = await getBalance(userId);
-  const configs = await AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean();
+  const [creditBalance, configs, occupying, eligibilities, allUserCycles] = await Promise.all([
+    getBalance(userId),
+    AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
+    AutopoolParticipation.find({ userId, releasedAt: null }).lean(),
+    AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
+    AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
+  ]);
 
-  const occupying = await AutopoolParticipation.find({
-    userId,
-    releasedAt: null,
-  }).lean();
-
-  const eligibilities = await AutopoolNextPoolEligibility.find({
-    userId,
-    status: 'AVAILABLE',
-  }).lean();
+  let totalEarnings = 0;
+  const poolEarningsMap = {};
+  for (const c of allUserCycles) {
+    const amt = Number(c.walletAmount) || 0;
+    totalEarnings += amt;
+    poolEarningsMap[c.poolLevel] = (poolEarningsMap[c.poolLevel] || 0) + amt;
+  }
 
   const pools = [];
   for (const cfg of configs) {
     const part = occupying.find((p) => p.poolLevel === cfg.poolLevel);
     const elig = eligibilities.find((e) => e.targetPoolLevel === cfg.poolLevel);
     const sourceElig = eligibilities.find((e) => e.sourcePoolLevel === cfg.poolLevel);
+
+    const nextCfg = configs.find((x) => x.poolLevel === cfg.poolLevel + 1);
+    const nextPoolTarget = nextCfg ? nextCfg.entryAmount : 0;
+    const nextPoolReserve = part ? (part.nextPoolEligibleAmount || 0) : 0;
+    const poolEarnings = poolEarningsMap[cfg.poolLevel] || 0;
 
     let joinPool1 = null;
     let joinNext = null;
@@ -66,6 +74,9 @@ async function getOverview(userId) {
       entryAmount: cfg.entryAmount,
       occupying: Boolean(part),
       released: part ? isPoolReleased(part) : true,
+      poolEarnings,
+      nextPoolReserve,
+      nextPoolTarget,
       participation: part
         ? {
             id: part._id,
@@ -86,12 +97,18 @@ async function getOverview(userId) {
   return {
     enabled,
     creditBalance,
+    totalEarnings,
     pools,
   };
 }
 
 async function getPoolDetail(userId, poolLevel) {
   const level = Number(poolLevel);
+  const configs = await AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean();
+  const currentCfg = configs.find((x) => x.poolLevel === level);
+  const nextCfg = configs.find((x) => x.poolLevel === level + 1);
+  const nextPoolTarget = nextCfg ? nextCfg.entryAmount : 0;
+
   const part = await findOccupyingParticipation(userId, level);
   const history = await AutopoolParticipation.find({ userId, poolLevel: level })
     .sort({ createdAt: -1 })
@@ -99,13 +116,23 @@ async function getPoolDetail(userId, poolLevel) {
     .lean();
 
   let cycles = [];
+  let poolEarnings = 0;
   if (part) {
     cycles = await AutopoolCycle.find({ participationId: part._id })
       .sort({ cycleNumber: 1 })
       .lean();
+    poolEarnings = cycles.reduce((acc, c) => acc + (Number(c.walletAmount) || 0), 0);
   }
 
-  return { participation: part, history, cycles };
+  return {
+    participation: part,
+    history,
+    cycles,
+    poolEarnings,
+    nextPoolReserve: part?.nextPoolEligibleAmount || 0,
+    nextPoolTarget,
+    entryAmount: currentCfg?.entryAmount || 500,
+  };
 }
 
 async function getCredits(userId) {
