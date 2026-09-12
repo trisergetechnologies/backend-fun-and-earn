@@ -14,7 +14,7 @@ const { findOccupyingParticipation } = require('./entry.service');
 
 function calculateWaitingJoinsNeeded(participation, openPlacements) {
   if (!participation) return { joinsNeeded: null, isLastCycle: false };
-  const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+  const maxCycles = participation.configSnapshot?.maxCycles ?? 10;
   const cycleCount = participation.cycleCount || 0;
   const isLastCycle = cycleCount === maxCycles - 1;
 
@@ -127,7 +127,7 @@ async function getOverview(userId) {
             id: part._id,
             status: part.status,
             cycleCount: part.cycleCount,
-            maxCycles: part.configSnapshot?.maxCycles ?? 15,
+            maxCycles: part.configSnapshot?.maxCycles ?? 10,
             upgradeUsedAt: part.upgradeUsedAt,
             releasedAt: part.releasedAt,
             nextPoolEligibleAmount: part.nextPoolEligibleAmount,
@@ -173,7 +173,7 @@ async function getPoolDetail(userId, poolLevel) {
       .lean();
     poolEarnings = cycles.reduce((acc, c) => acc + (Number(c.walletAmount) || 0), 0);
 
-    const maxCycles = part.configSnapshot?.maxCycles ?? 15;
+    const maxCycles = part.configSnapshot?.maxCycles ?? 10;
     const cycleCount = part.cycleCount || 0;
     if (cycleCount < maxCycles) {
       const openPlacements = await AutopoolPlacement.find({

@@ -175,7 +175,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
   }
 
   const nextCycleNumber = (parentParticipation.cycleCount || 0) + 1;
-  const maxCycles = parentParticipation.configSnapshot?.maxCycles ?? 15;
+  const maxCycles = parentParticipation.configSnapshot?.maxCycles ?? 10;
   if (nextCycleNumber > maxCycles) {
     return null;
   }

@@ -69,11 +69,11 @@ async function seedPoolConfigs(session) {
       {
         $set: {
           entryAmount: p.entryAmount,
+          maxCycles: 10,
         },
         $setOnInsert: {
           poolLevel: p.poolLevel,
           collectionMultiplier: 2,
-          maxCycles: 15,
           distribution: { ...DEFAULT_DISTRIBUTION },
           active: true,
           configVersion: 1,
@@ -96,7 +96,7 @@ function snapshotFromConfig(config) {
   return {
     entryAmount: config.entryAmount,
     collectionMultiplier: config.collectionMultiplier ?? 2,
-    maxCycles: config.maxCycles ?? 15,
+    maxCycles: config.maxCycles ?? 10,
     samePoolPercent: config.distribution?.samePoolPercent ?? 50,
     walletPercent: config.distribution?.walletPercent ?? 20,
     nextPoolPercent: config.distribution?.nextPoolPercent ?? 20,

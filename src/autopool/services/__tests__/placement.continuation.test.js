@@ -24,14 +24,14 @@ function pickFifoParent(openSeats, seekerParticipationId) {
 }
 
 describe('filler continuation contract', () => {
-  test('cycles 1–14 re-enter as filler, never WAITING parent', () => {
+  test('cycles 1–9 re-enter as filler, never WAITING parent', () => {
     expect(continuationAfterCycle({ isFinalCycle: false, samePoolAmount: 500 })).toEqual({
       reenterAsFiller: true,
       createWaitingParent: false,
     });
   });
 
-  test('cycle 15 does not re-enter', () => {
+  test('final cycle 10 does not re-enter', () => {
     expect(continuationAfterCycle({ isFinalCycle: true, samePoolAmount: 0 })).toEqual({
       reenterAsFiller: false,
       createWaitingParent: false,

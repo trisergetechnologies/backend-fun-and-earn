@@ -7,7 +7,7 @@ function computeCycleDistribution({ participation, cycleNumber }) {
   const entry = snap.entryAmount;
   const mult = snap.collectionMultiplier ?? 2;
   const collectionAmount = entry * mult;
-  const maxCycles = snap.maxCycles ?? 15;
+  const maxCycles = snap.maxCycles ?? 10;
   const poolLevel = participation.poolLevel;
 
   const pct = (p) => Math.floor((collectionAmount * p) / 100);
@@ -34,7 +34,7 @@ function computeCycleDistribution({ participation, cycleNumber }) {
     nextPoolAmount = 0;
   }
 
-  // Cycle 15: same-pool continuation → Feature
+  // Final cycle (e.g. Cycle 10): same-pool continuation → Feature
   if (isFinalCycle) {
     featureAmount += samePoolAmount;
     samePoolAmount = 0;

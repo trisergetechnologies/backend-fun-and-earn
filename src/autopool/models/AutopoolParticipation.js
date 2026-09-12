@@ -4,7 +4,7 @@ const ConfigSnapshotSchema = new mongoose.Schema(
   {
     entryAmount: { type: Number, required: true },
     collectionMultiplier: { type: Number, default: 2 },
-    maxCycles: { type: Number, default: 15 },
+    maxCycles: { type: Number, default: 10 },
     samePoolPercent: { type: Number, default: 50 },
     walletPercent: { type: Number, default: 20 },
     nextPoolPercent: { type: Number, default: 20 },

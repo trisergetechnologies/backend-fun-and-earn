@@ -16,7 +16,7 @@ const AutopoolPoolConfigSchema = new mongoose.Schema(
     poolLevel: { type: Number, required: true, min: 1, max: 10, unique: true },
     entryAmount: { type: Number, required: true, min: 0 },
     collectionMultiplier: { type: Number, default: 2 },
-    maxCycles: { type: Number, default: 15 },
+    maxCycles: { type: Number, default: 10 },
     distribution: { type: DistributionSchema, default: () => ({}) },
     active: { type: Boolean, default: true },
     configVersion: { type: Number, default: 1 },

@@ -337,7 +337,7 @@ exports.getMatrix = async (req, res) => {
         user: userMap[String(pl.userId)] || null,
         parentUser: parentUserResolved,
         cycleCount: part?.cycleCount ?? null,
-        maxCycles: part?.configSnapshot?.maxCycles ?? 15,
+        maxCycles: part?.configSnapshot?.maxCycles ?? 10,
         participationStatus: part?.status ?? null,
         isCurrentSeat: currentPlacementIds.has(String(pl._id)),
         filledAt: pl.filledAt,
@@ -520,7 +520,7 @@ exports.getParticipationJourney = async (req, res) => {
     );
 
     // Waiting queue position & cycle projection calculation
-    const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+    const maxCycles = participation.configSnapshot?.maxCycles ?? 10;
     const cycleCount = participation.cycleCount || 0;
     const isMaxCyclesReached = cycleCount >= maxCycles;
 

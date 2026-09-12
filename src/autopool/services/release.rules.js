@@ -6,14 +6,14 @@ function isPoolReleased(participation) {
   if (!participation) return true;
   if (participation.releasedAt) return true;
 
-  const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+  const maxCycles = participation.configSnapshot?.maxCycles ?? 10;
   const cyclesDone = (participation.cycleCount || 0) >= maxCycles;
 
   if (participation.poolLevel === 10) {
     return cyclesDone;
   }
 
-  // Pools 1–9: 15/15 AND upgrade used
+  // Pools 1–9: 10/10 AND upgrade used
   return cyclesDone && Boolean(participation.upgradeUsedAt);
 }
 
@@ -25,7 +25,7 @@ function computeReleasedAt(participation, now = new Date()) {
 }
 
 function shouldReleaseAfterUpgrade(participation, now = new Date()) {
-  const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+  const maxCycles = participation.configSnapshot?.maxCycles ?? 10;
   const cyclesDone = (participation.cycleCount || 0) >= maxCycles;
   if (participation.poolLevel === 10) {
     return cyclesDone ? now : null;

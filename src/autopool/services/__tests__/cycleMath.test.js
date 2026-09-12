@@ -6,7 +6,7 @@ function baseParticipation(overrides = {}) {
     configSnapshot: {
       entryAmount: 500,
       collectionMultiplier: 2,
-      maxCycles: 15,
+      maxCycles: 10,
       samePoolPercent: 50,
       walletPercent: 20,
       nextPoolPercent: 20,
@@ -54,10 +54,10 @@ describe('cycleMath.computeCycleDistribution', () => {
     expect(d.samePoolAmount).toBe(500);
   });
 
-  test('cycle 15 sends same-pool and next-pool to Feature', () => {
+  test('cycle 10 sends same-pool and next-pool to Feature', () => {
     const d = computeCycleDistribution({
       participation: baseParticipation(),
-      cycleNumber: 15,
+      cycleNumber: 10,
     });
     expect(d.isFinalCycle).toBe(true);
     expect(d.samePoolAmount).toBe(0);
@@ -73,7 +73,7 @@ describe('cycleMath.computeCycleDistribution', () => {
         configSnapshot: {
           entryAmount: 256000,
           collectionMultiplier: 2,
-          maxCycles: 15,
+          maxCycles: 10,
           samePoolPercent: 50,
           walletPercent: 20,
           nextPoolPercent: 20,
