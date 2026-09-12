@@ -5,11 +5,43 @@ const {
   AutopoolReferralEvent,
   AutopoolUpgradeCreditLedger,
   AutopoolPoolConfig,
+  AutopoolPlacement,
 } = require('../models');
 const { ensureSettings, seedPoolConfigs, isAutopoolEnabled } = require('./config.service');
 const { getBalance } = require('./referralCredit.service');
 const { isPoolReleased } = require('./release.rules');
 const { findOccupyingParticipation } = require('./entry.service');
+
+function calculateWaitingJoinsNeeded(participation, openPlacements) {
+  if (!participation) return { joinsNeeded: null, isLastCycle: false };
+  const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+  const cycleCount = participation.cycleCount || 0;
+  const isLastCycle = cycleCount === maxCycles - 1;
+
+  if (cycleCount >= maxCycles) {
+    return { joinsNeeded: null, isLastCycle: false };
+  }
+
+  const poolOpenPlacements = (openPlacements || []).filter(
+    (p) => p.poolLevel === participation.poolLevel
+  );
+  const openQueueIndex = poolOpenPlacements.findIndex(
+    (p) => String(p.participationId) === String(participation._id)
+  );
+
+  if (openQueueIndex < 0) {
+    return { joinsNeeded: null, isLastCycle };
+  }
+
+  let slotsAhead = 0;
+  for (let i = 0; i < openQueueIndex; i += 1) {
+    slotsAhead += poolOpenPlacements[i].openSlots || 0;
+  }
+  const openSlotsRemaining = poolOpenPlacements[openQueueIndex].openSlots || 0;
+  const joinsNeeded = slotsAhead + openSlotsRemaining;
+
+  return { joinsNeeded, isLastCycle };
+}
 
 async function getOverview(userId) {
   await seedPoolConfigs();
@@ -23,6 +55,17 @@ async function getOverview(userId) {
     AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
     AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
   ]);
+
+  const occupyingPoolLevels = occupying.map((p) => p.poolLevel);
+  const openPlacements = occupyingPoolLevels.length > 0
+    ? await AutopoolPlacement.find({
+        poolLevel: { $in: occupyingPoolLevels },
+        status: { $in: ['PLACED', 'WAITING'] },
+        openSlots: { $gt: 0 },
+      })
+        .sort({ queueSequence: 1 })
+        .lean()
+    : [];
 
   let totalEarnings = 0;
   const poolEarningsMap = {};
@@ -42,6 +85,7 @@ async function getOverview(userId) {
     const nextPoolTarget = nextCfg ? nextCfg.entryAmount : 0;
     const nextPoolReserve = part ? (part.nextPoolEligibleAmount || 0) : 0;
     const poolEarnings = poolEarningsMap[cfg.poolLevel] || 0;
+    const { joinsNeeded, isLastCycle } = calculateWaitingJoinsNeeded(part, openPlacements);
 
     let joinPool1 = null;
     let joinNext = null;
@@ -77,6 +121,8 @@ async function getOverview(userId) {
       poolEarnings,
       nextPoolReserve,
       nextPoolTarget,
+      joinsNeeded,
+      isLastCycle,
       participation: part
         ? {
             id: part._id,
@@ -86,6 +132,8 @@ async function getOverview(userId) {
             upgradeUsedAt: part.upgradeUsedAt,
             releasedAt: part.releasedAt,
             nextPoolEligibleAmount: part.nextPoolEligibleAmount,
+            joinsNeeded,
+            isLastCycle,
           }
         : null,
       sourceEligibility: sourceElig || null,
@@ -117,20 +165,40 @@ async function getPoolDetail(userId, poolLevel) {
 
   let cycles = [];
   let poolEarnings = 0;
+  let joinsNeeded = null;
+  let isLastCycle = false;
+
   if (part) {
     cycles = await AutopoolCycle.find({ participationId: part._id })
       .sort({ cycleNumber: 1 })
       .lean();
     poolEarnings = cycles.reduce((acc, c) => acc + (Number(c.walletAmount) || 0), 0);
+
+    const maxCycles = part.configSnapshot?.maxCycles ?? 15;
+    const cycleCount = part.cycleCount || 0;
+    if (cycleCount < maxCycles) {
+      const openPlacements = await AutopoolPlacement.find({
+        poolLevel: level,
+        status: { $in: ['PLACED', 'WAITING'] },
+        openSlots: { $gt: 0 },
+      })
+        .sort({ queueSequence: 1 })
+        .lean();
+      const waiting = calculateWaitingJoinsNeeded(part, openPlacements);
+      joinsNeeded = waiting.joinsNeeded;
+      isLastCycle = waiting.isLastCycle;
+    }
   }
 
   return {
-    participation: part,
+    participation: part ? { ...part, joinsNeeded, isLastCycle } : null,
     history,
     cycles,
     poolEarnings,
     nextPoolReserve: part?.nextPoolEligibleAmount || 0,
     nextPoolTarget,
+    joinsNeeded,
+    isLastCycle,
     entryAmount: currentCfg?.entryAmount || 500,
   };
 }
@@ -141,15 +209,33 @@ async function getCredits(userId) {
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
+
+  const refEventIds = ledger.map((l) => l.referralEventId).filter(Boolean);
+  if (refEventIds.length > 0) {
+    const events = await AutopoolReferralEvent.find({ eventId: { $in: refEventIds } })
+      .populate('referredUserId', 'serialNumber name')
+      .lean();
+    const eventMap = new Map(events.map((e) => [e.eventId, e]));
+    for (const row of ledger) {
+      if (row.referralEventId && eventMap.has(row.referralEventId)) {
+        const ev = eventMap.get(row.referralEventId);
+        row.referredSerialNumber = ev?.referredUserId?.serialNumber;
+        row.referredName = ev?.referredUserId?.name;
+      }
+    }
+  }
+
   return { balance, ledger };
 }
 
 async function getReferrals(userId) {
   const asReferrer = await AutopoolReferralEvent.find({ referrerUserId: userId })
+    .populate('referredUserId', 'serialNumber name')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
   const asReferred = await AutopoolReferralEvent.find({ referredUserId: userId })
+    .populate('referrerUserId', 'serialNumber name')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
