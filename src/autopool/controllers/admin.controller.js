@@ -212,6 +212,275 @@ exports.getEligibilities = async (req, res) => {
   }
 };
 
+/**
+ * Full pool matrix for admin visualization: all seats, FIFO open queue, recent cycles.
+ * GET /autopool/admin/matrix?poolLevel=1
+ */
+exports.getMatrix = async (req, res) => {
+  try {
+    const poolLevel = Math.min(10, Math.max(1, Number(req.query.poolLevel) || 1));
+
+    const [placements, participations, recentCycles, balances, occupying] =
+      await Promise.all([
+        AutopoolPlacement.find({ poolLevel })
+          .sort({ queueSequence: 1 })
+          .limit(2000)
+          .lean(),
+        AutopoolParticipation.find({ poolLevel, releasedAt: null })
+          .select(
+            '_id userId cycleCount status placementId nextPoolEligibleAmount entryType isBootstrap configSnapshot.maxCycles'
+          )
+          .lean(),
+        AutopoolCycle.find({ poolLevel })
+          .sort({ completedAt: -1 })
+          .limit(30)
+          .lean(),
+        ensureSystemBalances(),
+        AutopoolParticipation.countDocuments({ poolLevel, releasedAt: null }),
+      ]);
+
+    const userIds = new Set();
+    placements.forEach((p) => {
+      if (p.userId) userIds.add(String(p.userId));
+    });
+    participations.forEach((p) => {
+      if (p.userId) userIds.add(String(p.userId));
+    });
+    recentCycles.forEach((c) => {
+      if (c.userId) userIds.add(String(c.userId));
+    });
+
+    const users = await User.find({ _id: { $in: [...userIds] } })
+      .select('name serialNumber')
+      .lean();
+    const userMap = {};
+    users.forEach((u) => {
+      userMap[String(u._id)] = {
+        _id: u._id,
+        name: u.name,
+        serialNumber: u.serialNumber,
+      };
+    });
+
+    const partMap = {};
+    const currentPlacementIds = new Set();
+    participations.forEach((p) => {
+      partMap[String(p._id)] = p;
+      if (p.placementId) currentPlacementIds.add(String(p.placementId));
+    });
+
+    const seats = placements.map((pl) => {
+      const part = partMap[String(pl.participationId)];
+      const parentPart = pl.parentParticipationId
+        ? partMap[String(pl.parentParticipationId)]
+        : null;
+      const parentUser = parentPart
+        ? userMap[String(parentPart.userId)]
+        : pl.parentParticipationId
+          ? null
+          : null;
+      // parent user from any placement of parent participation
+      let parentUserResolved = parentUser;
+      if (pl.parentParticipationId && !parentUserResolved) {
+        const parentSeat = placements.find(
+          (x) => String(x.participationId) === String(pl.parentParticipationId)
+        );
+        if (parentSeat) parentUserResolved = userMap[String(parentSeat.userId)] || null;
+      }
+
+      return {
+        placementId: pl._id,
+        queueSequence: pl.queueSequence,
+        slot: pl.slot,
+        status: pl.status,
+        openSlots: pl.openSlots,
+        generation: pl.generation ?? 0,
+        leftChildParticipationId: pl.leftChildParticipationId,
+        rightChildParticipationId: pl.rightChildParticipationId,
+        participationId: pl.participationId,
+        parentParticipationId: pl.parentParticipationId,
+        userId: pl.userId,
+        user: userMap[String(pl.userId)] || null,
+        parentUser: parentUserResolved,
+        cycleCount: part?.cycleCount ?? null,
+        maxCycles: part?.configSnapshot?.maxCycles ?? 15,
+        participationStatus: part?.status ?? null,
+        isCurrentSeat: currentPlacementIds.has(String(pl._id)),
+        filledAt: pl.filledAt,
+      };
+    });
+
+    const fifoQueue = seats
+      .filter(
+        (s) =>
+          (s.status === 'PLACED' || s.status === 'WAITING') && (s.openSlots || 0) > 0
+      )
+      .sort((a, b) => a.queueSequence - b.queueSequence)
+      .map((s) => ({
+        placementId: s.placementId,
+        queueSequence: s.queueSequence,
+        openSlots: s.openSlots,
+        slot: s.slot,
+        user: s.user,
+        participationId: s.participationId,
+        nextSlot: s.leftChildParticipationId ? 'right' : 'left',
+      }));
+
+    const nextFill = fifoQueue[0] || null;
+
+    const cyclesOut = recentCycles.map((c) => ({
+      _id: c._id,
+      participationId: c.participationId,
+      userId: c.userId,
+      user: userMap[String(c.userId)] || null,
+      poolLevel: c.poolLevel,
+      cycleNumber: c.cycleNumber,
+      collectionAmount: c.collectionAmount,
+      samePoolAmount: c.samePoolAmount,
+      walletAmount: c.walletAmount,
+      nextPoolAmount: c.nextPoolAmount,
+      adminAmount: c.adminAmount,
+      featureAmount: c.featureAmount,
+      completedAt: c.completedAt,
+    }));
+
+    const openSeatCount = fifoQueue.reduce((n, s) => n + (s.openSlots || 0), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        poolLevel,
+        summary: {
+          occupying,
+          seatCount: seats.length,
+          openParents: fifoQueue.length,
+          openChildSlots: openSeatCount,
+          cyclesInFeed: cyclesOut.length,
+          featureReserve: balances.featureReserve,
+          adminAllocation: balances.adminAllocation,
+          nextFill,
+        },
+        seats,
+        fifoQueue,
+        recentCycles: cyclesOut,
+        howItWorks: [
+          'New join or same-pool re-entry claims the oldest open child seat (FIFO by queueSequence).',
+          'When both left and right fill, that seat cycles: wallet / same-pool / next-pool / admin / feature split.',
+          'Cycles 1–14: same participation re-enters as a filler child (not a new WAITING parent).',
+          'Referral SN is independent of matrix parent — who referred you ≠ who you sit under.',
+        ],
+      },
+    });
+  } catch (err) {
+    return mapError(err, res);
+  }
+};
+
+/**
+ * Full journey for one participation: seats, cycles, ledgers, referral.
+ * GET /autopool/admin/participations/:id/journey
+ */
+exports.getParticipationJourney = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const participation = await AutopoolParticipation.findById(id)
+      .populate('userId', 'name email serialNumber')
+      .lean();
+    if (!participation) {
+      return res.status(404).json({ success: false, message: 'Participation not found' });
+    }
+
+    const [seats, cycles, ledgers, referral, eligibility] = await Promise.all([
+      AutopoolPlacement.find({ participationId: id }).sort({ queueSequence: 1 }).lean(),
+      AutopoolCycle.find({ participationId: id }).sort({ cycleNumber: 1 }).lean(),
+      AutopoolLedger.find({ participationId: id }).sort({ createdAt: 1 }).lean(),
+      AutopoolReferralEvent.findOne({ participationId: id })
+        .populate('referrerUserId', 'name serialNumber')
+        .lean(),
+      AutopoolNextPoolEligibility.findOne({ sourceParticipationId: id }).lean(),
+    ]);
+
+    // Resolve parent labels for each seat
+    const parentIds = [
+      ...new Set(
+        seats
+          .map((s) => (s.parentParticipationId ? String(s.parentParticipationId) : null))
+          .filter(Boolean)
+      ),
+    ];
+    const parentParts = parentIds.length
+      ? await AutopoolParticipation.find({ _id: { $in: parentIds } })
+          .populate('userId', 'name serialNumber')
+          .lean()
+      : [];
+    const parentMap = {};
+    parentParts.forEach((p) => {
+      parentMap[String(p._id)] = p.userId
+        ? {
+            participationId: p._id,
+            name: p.userId.name,
+            serialNumber: p.userId.serialNumber,
+          }
+        : { participationId: p._id };
+    });
+
+    const seatOut = seats.map((s) => ({
+      placementId: s._id,
+      queueSequence: s.queueSequence,
+      slot: s.slot,
+      status: s.status,
+      openSlots: s.openSlots,
+      generation: s.generation ?? 0,
+      leftChildParticipationId: s.leftChildParticipationId,
+      rightChildParticipationId: s.rightChildParticipationId,
+      parentParticipationId: s.parentParticipationId,
+      parentUser: s.parentParticipationId
+        ? parentMap[String(s.parentParticipationId)] || null
+        : null,
+      isCurrentSeat: String(participation.placementId) === String(s._id),
+      filledAt: s.filledAt,
+    }));
+
+    const currentSeat = seatOut.find((s) => s.isCurrentSeat) || seatOut[seatOut.length - 1] || null;
+
+    return res.json({
+      success: true,
+      data: {
+        participation: {
+          _id: participation._id,
+          poolLevel: participation.poolLevel,
+          status: participation.status,
+          cycleCount: participation.cycleCount,
+          entryType: participation.entryType,
+          entryAmount: participation.entryAmount,
+          nextPoolEligibleAmount: participation.nextPoolEligibleAmount,
+          isBootstrap: participation.isBootstrap,
+          releasedAt: participation.releasedAt,
+          startedAt: participation.startedAt,
+          completedAt: participation.completedAt,
+          maxCycles: participation.configSnapshot?.maxCycles ?? 15,
+          user: participation.userId,
+        },
+        currentSeat,
+        seats: seatOut,
+        cycles,
+        ledgers,
+        referral: referral
+          ? {
+              referrerSerialNumber: referral.referrerSerialNumber,
+              referrer: referral.referrerUserId,
+              createdAt: referral.createdAt,
+            }
+          : null,
+        eligibility,
+        note: 'Referral SN is who they used at join. Matrix parent is who they sit under (FIFO).',
+      },
+    });
+  } catch (err) {
+    return mapError(err, res);
+  }
+};
+
 exports.bootstrap = async (req, res) => {
   try {
     let userId = req.body?.userId;

@@ -10,6 +10,8 @@ router.put('/enabled', adminCtrl.setEnabled);
 router.get('/configs', adminCtrl.getConfigs);
 router.put('/configs/:level', adminCtrl.updateConfig);
 router.get('/participations', adminCtrl.searchParticipations);
+router.get('/participations/:id/journey', adminCtrl.getParticipationJourney);
+router.get('/matrix', adminCtrl.getMatrix);
 router.get('/placements', adminCtrl.getPlacementQueue);
 router.get('/ledgers', adminCtrl.getLedgers);
 router.get('/cycles', adminCtrl.getCycles);

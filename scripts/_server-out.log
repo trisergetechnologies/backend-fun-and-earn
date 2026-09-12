@@ -430,3 +430,24 @@ CCAvenue cancel=http://localhost:5000/api/v1/public/ccavenue/cancel
 }
 📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789194960028', count: 0 }
 ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789194960028' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789195320019',
+  time: '2026-09-12T06:42:00.019Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789195320019', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789195320019' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789195680019',
+  time: '2026-09-12T06:48:00.019Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789195680019', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789195680019' }
+
+⏰ [PACKAGE_BUY_CRON] RUN START {
+  runId: 'PACKAGE_BUY_CRON_1789196040023',
+  time: '2026-09-12T06:54:00.023Z'
+}
+📦 [PACKAGE_BUY_CRON] Orders fetched { runId: 'PACKAGE_BUY_CRON_1789196040023', count: 0 }
+ℹ️ [PACKAGE_BUY_CRON] No unprocessed paid orders { runId: 'PACKAGE_BUY_CRON_1789196040023' }
