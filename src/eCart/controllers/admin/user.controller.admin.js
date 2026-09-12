@@ -82,7 +82,16 @@ exports.getUsers = async (req, res) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
     const sortOpt = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
 
-    const [users, total] = await Promise.all([
+    const userRoleFilter = { role: { $nin: ['admin', 'seller'] } };
+    const activeUserFilter = {
+      role: { $nin: ['admin', 'seller'] },
+      $or: [
+        { package: { $ne: null } },
+        { serialNumber: { $exists: true, $ne: null } },
+      ],
+    };
+
+    const [users, total, totalUsers, totalActiveUsers] = await Promise.all([
       User.find(filter, { password: 0, token: 0 })
         .populate('shortVideoProfile.videoUploads')
         .populate('eCartProfile.orders')
@@ -92,7 +101,9 @@ exports.getUsers = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      User.countDocuments(filter)
+      User.countDocuments(filter),
+      User.countDocuments(userRoleFilter),
+      User.countDocuments(activeUserFilter),
     ]);
 
     const totalPages = Math.ceil(total / limitNum) || 1;
@@ -101,7 +112,13 @@ exports.getUsers = async (req, res) => {
       success: true,
       message: appFilter ? `Users filtered by ${appFilter}` : 'All users fetched',
       data: users,
-      pagination: { page: parseInt(page, 10), limit: limitNum, total, totalPages }
+      pagination: { page: parseInt(page, 10), limit: limitNum, total, totalPages },
+      stats: {
+        totalUsers,
+        totalActiveUsers,
+      },
+      totalUsers,
+      totalActiveUsers,
     });
 
   } catch (err) {

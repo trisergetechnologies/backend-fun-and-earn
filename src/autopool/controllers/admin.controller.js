@@ -364,7 +364,7 @@ exports.getMatrix = async (req, res) => {
         fifoQueue,
         recentCycles: cyclesOut,
         howItWorks: [
-          'New join or same-pool re-entry claims the oldest open child seat (FIFO by queueSequence).',
+          'New join or same-pool re-entry claims the oldest open child seat (first come, first served).',
           'When both left and right fill, that seat cycles: wallet / same-pool / next-pool / admin / feature split.',
           'Cycles 1–14: same participation re-enters as a filler child (not a new WAITING parent).',
           'Referral SN is independent of matrix parent — who referred you ≠ who you sit under.',
@@ -383,22 +383,37 @@ exports.getMatrix = async (req, res) => {
 exports.getParticipationJourney = async (req, res) => {
   try {
     const id = req.params.id;
-    const participation = await AutopoolParticipation.findById(id)
-      .populate('userId', 'name email serialNumber')
-      .lean();
+    const participation = await AutopoolParticipation.findById(id).lean();
     if (!participation) {
       return res.status(404).json({ success: false, message: 'Participation not found' });
     }
 
-    const [seats, cycles, ledgers, referral, eligibility] = await Promise.all([
-      AutopoolPlacement.find({ participationId: id }).sort({ queueSequence: 1 }).lean(),
-      AutopoolCycle.find({ participationId: id }).sort({ cycleNumber: 1 }).lean(),
-      AutopoolLedger.find({ participationId: id }).sort({ createdAt: 1 }).lean(),
-      AutopoolReferralEvent.findOne({ participationId: id })
-        .populate('referrerUserId', 'name serialNumber')
-        .lean(),
-      AutopoolNextPoolEligibility.findOne({ sourceParticipationId: id }).lean(),
-    ]);
+    const userId = participation.userId;
+    const [userDoc, seats, cycles, ledgers, referral, eligibility, allUserCycles, openPlacements] =
+      await Promise.all([
+        userId
+          ? User.findById(userId).select('name email serialNumber wallets').lean()
+          : Promise.resolve(null),
+        AutopoolPlacement.find({ participationId: id }).sort({ queueSequence: 1 }).lean(),
+        AutopoolCycle.find({ participationId: id }).sort({ cycleNumber: 1 }).lean(),
+        AutopoolLedger.find({ participationId: id }).sort({ createdAt: 1 }).lean(),
+        AutopoolReferralEvent.findOne({ participationId: id })
+          .populate('referrerUserId', 'name serialNumber')
+          .lean(),
+        AutopoolNextPoolEligibility.findOne({ sourceParticipationId: id }).lean(),
+        userId
+          ? AutopoolCycle.find({ userId })
+              .select('poolLevel walletAmount cycleNumber completedAt')
+              .lean()
+          : Promise.resolve([]),
+        AutopoolPlacement.find({
+          poolLevel: participation.poolLevel,
+          status: { $in: ['PLACED', 'WAITING'] },
+          openSlots: { $gt: 0 },
+        })
+          .sort({ queueSequence: 1 })
+          .lean(),
+      ]);
 
     // Resolve parent labels for each seat
     const parentIds = [
@@ -441,7 +456,135 @@ exports.getParticipationJourney = async (req, res) => {
       filledAt: s.filledAt,
     }));
 
+    if (!seatOut.some((s) => s.isCurrentSeat) && seatOut.length > 0) {
+      seatOut[seatOut.length - 1].isCurrentSeat = true;
+    }
+
     const currentSeat = seatOut.find((s) => s.isCurrentSeat) || seatOut[seatOut.length - 1] || null;
+
+    // Wallets
+    const wallets = {
+      eCartWallet: Number(userDoc?.wallets?.eCartWallet || 0),
+      shortVideoWallet: Number(userDoc?.wallets?.shortVideoWallet || 0),
+    };
+
+    // Earnings calculations
+    const poolCycles = (allUserCycles || []).filter(
+      (c) => Number(c.poolLevel) === Number(participation.poolLevel)
+    );
+    const poolEarnings = poolCycles.reduce(
+      (sum, c) => sum + (Number(c.walletAmount) || 0),
+      0
+    );
+    const totalEarnings = (allUserCycles || []).reduce(
+      (sum, c) => sum + (Number(c.walletAmount) || 0),
+      0
+    );
+    const thisParticipationEarnings = (cycles || []).reduce(
+      (sum, c) => sum + (Number(c.walletAmount) || 0),
+      0
+    );
+
+    // Waiting queue position & cycle projection calculation
+    const maxCycles = participation.configSnapshot?.maxCycles ?? 15;
+    const cycleCount = participation.cycleCount || 0;
+    const isMaxCyclesReached = cycleCount >= maxCycles;
+
+    let openQueueIndex = (openPlacements || []).findIndex(
+      (p) => String(p.participationId) === String(participation._id)
+    );
+    if (openQueueIndex === -1 && currentSeat?.placementId) {
+      openQueueIndex = (openPlacements || []).findIndex(
+        (p) => String(p._id) === String(currentSeat.placementId)
+      );
+    }
+
+    const estimatedCycleReward = Math.round(
+      ((participation.configSnapshot?.entryAmount || 500) *
+        (participation.configSnapshot?.collectionMultiplier || 2) *
+        (participation.configSnapshot?.walletPercent || 20)) /
+        100
+    );
+
+    let waitingInfo = {
+      status: 'NOT_IN_QUEUE',
+      label: 'Not in active queue',
+      queuePosition: null,
+      totalOpenParents: (openPlacements || []).length,
+      slotsAhead: 0,
+      openSlotsRemaining: 0,
+      slotsFilled: 0,
+      joinsNeededToCycle: 0,
+      joinsNeededToFirstChild: 0,
+      isNextInLine: false,
+      nextSlotToFill: null,
+      estimatedCycleReward,
+      explanation: '',
+    };
+
+    if (isMaxCyclesReached) {
+      waitingInfo = {
+        ...waitingInfo,
+        status: 'COMPLETED_ALL_CYCLES',
+        label: `Completed all ${maxCycles} cycles`,
+        explanation: `User has completed all ${maxCycles} cycles in Pool ${participation.poolLevel} and fully graduated.`,
+      };
+    } else if (openQueueIndex >= 0) {
+      const activeOpenPlacement = openPlacements[openQueueIndex];
+      let slotsAhead = 0;
+      for (let i = 0; i < openQueueIndex; i += 1) {
+        slotsAhead += openPlacements[i].openSlots || 0;
+      }
+      const openSlotsRemaining = activeOpenPlacement.openSlots || 0;
+      const slotsFilled = Math.max(0, 2 - openSlotsRemaining);
+      const joinsNeededToCycle = slotsAhead + openSlotsRemaining;
+      const isNextInLine = openQueueIndex === 0;
+      const nextSlotToFill = activeOpenPlacement.leftChildParticipationId ? 'Right' : 'Left';
+      const joinsNeededToFirstChild = openSlotsRemaining === 2 ? slotsAhead + 1 : 0;
+
+      let explanation = '';
+      if (isNextInLine) {
+        if (openSlotsRemaining === 1) {
+          explanation = `Next in line! Left slot is filled. 1 more joiner will fill the Right slot and complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+        } else {
+          explanation = `Next in line! 2 more joiners needed to fill both slots and complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+        }
+      } else {
+        explanation = `${slotsAhead} open slot${slotsAhead === 1 ? '' : 's'} ahead in the queue. After ${joinsNeededToCycle} more member${joinsNeededToCycle === 1 ? '' : 's'} join this pool, this user will complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+      }
+
+      waitingInfo = {
+        ...waitingInfo,
+        status: 'IN_QUEUE',
+        label: isNextInLine
+          ? `Next in line (${joinsNeededToCycle} join${joinsNeededToCycle === 1 ? '' : 's'} needed)`
+          : `Queue #${openQueueIndex + 1} (${joinsNeededToCycle} joins needed)`,
+        queuePosition: openQueueIndex + 1,
+        totalOpenParents: (openPlacements || []).length,
+        slotsAhead,
+        openSlotsRemaining,
+        slotsFilled,
+        joinsNeededToCycle,
+        joinsNeededToFirstChild,
+        isNextInLine,
+        nextSlotToFill,
+        explanation,
+      };
+    } else if (currentSeat?.status === 'CYCLE_DONE') {
+      waitingInfo = {
+        ...waitingInfo,
+        status: 'CYCLE_PROCESSING',
+        label: 'Seat cycled · Pending re-entry',
+        explanation: `Cycle ${cycleCount} completed. Awaiting next placement in the matrix queue.`,
+      };
+    } else {
+      waitingInfo = {
+        ...waitingInfo,
+        status: 'NOT_IN_QUEUE',
+        label: 'Not in active queue',
+        explanation: `Participation status is ${participation.status}. Not currently occupying an open slot in Pool ${participation.poolLevel}.`,
+      };
+    }
 
     return res.json({
       success: true,
@@ -458,9 +601,25 @@ exports.getParticipationJourney = async (req, res) => {
           releasedAt: participation.releasedAt,
           startedAt: participation.startedAt,
           completedAt: participation.completedAt,
-          maxCycles: participation.configSnapshot?.maxCycles ?? 15,
-          user: participation.userId,
+          maxCycles,
+          user: userDoc
+            ? {
+                _id: userDoc._id,
+                name: userDoc.name,
+                email: userDoc.email,
+                serialNumber: userDoc.serialNumber,
+              }
+            : null,
         },
+        wallets,
+        earnings: {
+          poolEarnings,
+          totalEarnings,
+          thisParticipationEarnings,
+          poolCycleCount: poolCycles.length,
+          totalCycleCount: (allUserCycles || []).length,
+        },
+        waitingInfo,
         currentSeat,
         seats: seatOut,
         cycles,
