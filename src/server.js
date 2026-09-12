@@ -12,7 +12,14 @@ const app = createApp();
 
 // Connect to database before starting server
 connectDB()
-  .then(() => {
+  .then(async () => {
+    try {
+      const { seedPoolConfigs } = require('./autopool/services/config.service');
+      await seedPoolConfigs();
+    } catch (err) {
+      console.error('Failed to seed autopool pool configs:', err.message);
+    }
+
     // Start listening for requests after DB connection is established
     const server = app.listen(port, () => {
       const backendUrl = (process.env.BACKEND_URL || '').replace(/\/$/, '');

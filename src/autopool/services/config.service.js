@@ -56,7 +56,12 @@ async function ensureSystemBalances(session) {
   return doc;
 }
 
+let hasSeededPoolConfigs = false;
+
 async function seedPoolConfigs(session) {
+  if (!session && hasSeededPoolConfigs) {
+    return AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean();
+  }
   const opts = session ? { session } : {};
   for (const p of DEFAULT_POOLS) {
     await AutopoolPoolConfig.findOneAndUpdate(
@@ -74,6 +79,9 @@ async function seedPoolConfigs(session) {
       },
       { upsert: true, new: true, ...opts }
     );
+  }
+  if (!session) {
+    hasSeededPoolConfigs = true;
   }
   return AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).session(session || null);
 }

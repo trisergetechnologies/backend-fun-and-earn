@@ -28,5 +28,6 @@ const AutopoolCycleSchema = new mongoose.Schema(
 );
 
 AutopoolCycleSchema.index({ participationId: 1, cycleNumber: 1 }, { unique: true });
+AutopoolCycleSchema.index({ userId: 1 });
 
 module.exports = mongoose.model('AutopoolCycle', AutopoolCycleSchema);

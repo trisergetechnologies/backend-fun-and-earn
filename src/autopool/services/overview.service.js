@@ -44,17 +44,15 @@ function calculateWaitingJoinsNeeded(participation, openPlacements) {
 }
 
 async function getOverview(userId) {
-  await seedPoolConfigs();
-  const settings = await ensureSettings();
-  const enabled = Boolean(settings.enabled);
-
-  const [creditBalance, configs, occupying, eligibilities, allUserCycles] = await Promise.all([
+  const [creditBalance, configs, occupying, eligibilities, allUserCycles, settings] = await Promise.all([
     getBalance(userId),
     AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
     AutopoolParticipation.find({ userId, releasedAt: null }).lean(),
     AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
     AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
+    ensureSettings(),
   ]);
+  const enabled = Boolean(settings?.enabled);
 
   const occupyingPoolLevels = occupying.map((p) => p.poolLevel);
   const openPlacements = occupyingPoolLevels.length > 0
@@ -63,6 +61,7 @@ async function getOverview(userId) {
         status: { $in: ['PLACED', 'WAITING'] },
         openSlots: { $gt: 0 },
       })
+        .select('poolLevel participationId openSlots queueSequence')
         .sort({ queueSequence: 1 })
         .lean()
     : [];
@@ -182,6 +181,7 @@ async function getPoolDetail(userId, poolLevel) {
         status: { $in: ['PLACED', 'WAITING'] },
         openSlots: { $gt: 0 },
       })
+        .select('poolLevel participationId openSlots queueSequence')
         .sort({ queueSequence: 1 })
         .lean();
       const waiting = calculateWaitingJoinsNeeded(part, openPlacements);
