@@ -545,12 +545,12 @@ exports.getParticipationJourney = async (req, res) => {
       let explanation = '';
       if (isNextInLine) {
         if (openSlotsRemaining === 1) {
-          explanation = `Next in line! Left slot is filled. 1 more joiner will fill the Right slot and complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+          explanation = `Next in line! Left slot is filled. 1 more joiner will fill the Right slot and complete Cycle ${cycleCount + 1} (+${estimatedCycleReward}).`;
         } else {
-          explanation = `Next in line! 2 more joiners needed to fill both slots and complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+          explanation = `Next in line! 2 more joiners needed to fill both slots and complete Cycle ${cycleCount + 1} (+${estimatedCycleReward}).`;
         }
       } else {
-        explanation = `${slotsAhead} open slot${slotsAhead === 1 ? '' : 's'} ahead in the queue. After ${joinsNeededToCycle} more member${joinsNeededToCycle === 1 ? '' : 's'} join this pool, this user will complete Cycle ${cycleCount + 1} (+₹${estimatedCycleReward}).`;
+        explanation = `${slotsAhead} open slot${slotsAhead === 1 ? '' : 's'} ahead in the queue. After ${joinsNeededToCycle} more member${joinsNeededToCycle === 1 ? '' : 's'} join this pool, this user will complete Cycle ${cycleCount + 1} (+${estimatedCycleReward}).`;
       }
 
       waitingInfo = {
