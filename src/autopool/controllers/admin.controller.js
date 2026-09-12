@@ -33,21 +33,55 @@ function mapError(err, res) {
 exports.getHealth = async (req, res) => {
   try {
     await seedPoolConfigs();
-    const settings = await ensureSettings();
-    const balances = await ensureSystemBalances();
-    const poolCount = await AutopoolPoolConfig.countDocuments();
-    const occupying = await AutopoolParticipation.countDocuments({ releasedAt: null });
-    const enabled = await isAutopoolEnabled();
+    const [settings, balances, configs, occupying, totalCycles, poolAgg, enabled] =
+      await Promise.all([
+        ensureSettings(),
+        ensureSystemBalances(),
+        AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
+        AutopoolParticipation.countDocuments({ releasedAt: null }),
+        AutopoolCycle.countDocuments(),
+        AutopoolParticipation.aggregate([
+          { $match: { releasedAt: null } },
+          {
+            $group: {
+              _id: '$poolLevel',
+              activeMembers: { $sum: 1 },
+              totalCycles: { $sum: '$cycleCount' },
+            },
+          },
+        ]),
+        isAutopoolEnabled(),
+      ]);
+
+    const statMap = {};
+    (poolAgg || []).forEach((item) => {
+      statMap[item._id] = {
+        activeMembers: item.activeMembers || 0,
+        totalCycles: item.totalCycles || 0,
+      };
+    });
+
+    const pools = configs.map((cfg) => ({
+      poolLevel: cfg.poolLevel,
+      entryAmount: cfg.entryAmount,
+      active: cfg.active,
+      maxCycles: cfg.maxCycles,
+      activeMembers: statMap[cfg.poolLevel]?.activeMembers || 0,
+      totalCycles: statMap[cfg.poolLevel]?.totalCycles || 0,
+    }));
+
     return res.json({
       success: true,
       data: {
         enabled,
         enabledSource: enabledSourceLabel(),
         bootstrapUserId: settings.bootstrapUserId,
-        poolCount,
+        poolCount: configs.length,
         occupyingParticipations: occupying,
+        totalCyclesCompleted: totalCycles,
         featureReserve: balances.featureReserve,
         adminAllocation: balances.adminAllocation,
+        pools,
       },
     });
   } catch (err) {
