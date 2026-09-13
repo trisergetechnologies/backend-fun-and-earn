@@ -254,6 +254,7 @@ exports.getUserProfile = async (req, res) => {
         state_address: user.state_address,
         referralCode: user.referralCode,
         referredBy: user.referredBy,
+        serialNumber: user.serialNumber ?? null,
         packages: user.package?.name ? user.package : false,
         wallets: user.wallets,
         createdAt: user.createdAt
