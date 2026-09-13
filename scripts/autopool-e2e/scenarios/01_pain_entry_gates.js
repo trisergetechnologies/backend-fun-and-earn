@@ -32,6 +32,16 @@ module.exports = {
       );
     }
 
+    // P0 legal notice required
+    const uLegal = await provision(ctx, { tag: 'legal', eCartBalance: 5000 });
+    const rLegal = await userPost(ctx, uLegal.token, '/pools/1/join', {
+      referrerSerialNumber: ctx.root.serialNumber,
+      legalNoticeAccepted: false,
+    });
+    expectStatus(rLegal, 400);
+    expectCode(rLegal, 'LEGAL_NOTICE_REQUIRED');
+    notes.push('P0 legal notice');
+
     // P2 no package
     const uNoPkg = await provision(ctx, {
       tag: 'nopkg',

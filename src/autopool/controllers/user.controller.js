@@ -27,6 +27,7 @@ function mapError(err, res) {
     TARGET_OCCUPYING: 409,
     INVALID_POOL: 400,
     USER_NOT_FOUND: 404,
+    LEGAL_NOTICE_REQUIRED: 400,
   };
   const status = statusByCode[code] || 500;
   return res.status(status).json({
@@ -86,7 +87,7 @@ exports.getReferrals = async (req, res) => {
 
 exports.joinPool1 = async (req, res) => {
   try {
-    const { referrerSerialNumber, idempotencyKey } = req.body || {};
+    const { referrerSerialNumber, idempotencyKey, legalNoticeAccepted } = req.body || {};
     if (referrerSerialNumber === undefined || referrerSerialNumber === null || referrerSerialNumber === '') {
       return res.status(400).json({
         success: false,
@@ -98,6 +99,7 @@ exports.joinPool1 = async (req, res) => {
       userId: req.user._id,
       referrerSerialNumber,
       idempotencyKey: idempotencyKey || req.headers['idempotency-key'],
+      legalNoticeAccepted: Boolean(legalNoticeAccepted),
     });
     return res.status(result.alreadyProcessed ? 200 : 201).json({
       success: true,

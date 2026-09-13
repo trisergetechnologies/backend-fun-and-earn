@@ -307,6 +307,7 @@ async function seedAutopoolLocal() {
       userId: joiner._id,
       referrerSerialNumber: genesis.serialNumber,
       idempotencyKey: `local-seed-join-${profile.tag}`,
+      legalNoticeAccepted: true,
     });
     console.log(
       `[autopool-seed] Referral ${joiner.name} SN ${joiner.serialNumber} → used Priya SN ${genesis.serialNumber}` +

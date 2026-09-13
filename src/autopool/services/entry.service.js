@@ -16,6 +16,10 @@ const { debitEcartForAutopool } = require('./wallet.service');
 const { addCredit } = require('./referralCredit.service');
 const { placeParticipation } = require('./placement.service');
 const { isPoolReleased } = require('./release.rules');
+const {
+  LEGAL_NOTICE_VERSION,
+  LEGAL_NOTICE_TEXT,
+} = require('../constants/legalNotice');
 
 function makeId(prefix) {
   return `${prefix}:${crypto.randomBytes(12).toString('hex')}`;
@@ -52,6 +56,7 @@ async function joinPool1Manual({
   userId,
   referrerSerialNumber,
   idempotencyKey,
+  legalNoticeAccepted,
 }) {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -60,8 +65,14 @@ async function joinPool1Manual({
     await seedPoolConfigs(session);
     const enabled = await isAutopoolEnabled(session);
     if (!enabled) {
-      const err = new Error('Autopool is not enabled');
+      const err = new Error('Loyalty Pool is not enabled');
       err.code = 'AUTOPOOL_DISABLED';
+      throw err;
+    }
+
+    if (!legalNoticeAccepted) {
+      const err = new Error('You must accept the Important Legal Notice to join');
+      err.code = 'LEGAL_NOTICE_REQUIRED';
       throw err;
     }
 
@@ -85,7 +96,7 @@ async function joinPool1Manual({
       throw err;
     }
     if (!user.package) {
-      const err = new Error('Package purchase required for Autopool entry');
+      const err = new Error('Package purchase required for Loyalty Pool entry');
       err.code = 'NO_PACKAGE';
       throw err;
     }
@@ -118,7 +129,7 @@ async function joinPool1Manual({
 
     const referrerOccupying = await isUserOccupyingAnyPool(referrer._id, session);
     if (!referrerOccupying) {
-      const err = new Error('Referrer must be active in an Autopool pool — enter a valid SN');
+      const err = new Error('Referrer must be active in Loyalty Pool — enter a valid SN');
       err.code = 'REFERRER_NOT_ACTIVE';
       throw err;
     }
@@ -132,6 +143,7 @@ async function joinPool1Manual({
 
     const snapshot = snapshotFromConfig(config);
     const entryAmount = snapshot.entryAmount;
+    const acceptedAt = new Date();
 
     await debitEcartForAutopool({
       userId,
@@ -139,7 +151,7 @@ async function joinPool1Manual({
       idempotencyKey: `manual-entry-debit:${key}`,
       session,
       poolLevel: 1,
-      notes: `Autopool Pool 1 entry ${key}`,
+      notes: `Loyalty Pool Pool 1 entry ${key}`,
     });
 
     const [participation] = await AutopoolParticipation.create(
@@ -154,6 +166,10 @@ async function joinPool1Manual({
           configSnapshot: snapshot,
           manualEntryId: key,
           nextPoolEligibleAmount: 0,
+          legalNoticeAccepted: true,
+          legalNoticeAcceptedAt: acceptedAt,
+          legalNoticeVersion: LEGAL_NOTICE_VERSION,
+          legalNoticeText: LEGAL_NOTICE_TEXT,
         },
       ],
       { session }

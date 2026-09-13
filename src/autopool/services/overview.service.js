@@ -103,7 +103,7 @@ async function getOverview(userId) {
       if (!enabled) reasons.push('AUTOPOOL_DISABLED');
       if (part) reasons.push('TARGET_OCCUPYING');
       if (!elig) reasons.push('NO_ELIGIBILITY');
-      if (creditBalance < 1) reasons.push('NO_UPGRADE_CREDIT');
+      if (creditBalance < 2) reasons.push('NO_UPGRADE_CREDIT');
       joinNext = {
         allowed: reasons.length === 0,
         reasons,

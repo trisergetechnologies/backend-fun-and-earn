@@ -55,6 +55,11 @@ const AutopoolParticipationSchema = new mongoose.Schema(
       default: null,
     },
     isBootstrap: { type: Boolean, default: false },
+    /** Audit: Pool 1 manual join legal notice acceptance */
+    legalNoticeAccepted: { type: Boolean, default: false },
+    legalNoticeAcceptedAt: { type: Date, default: null },
+    legalNoticeVersion: { type: String, default: null },
+    legalNoticeText: { type: String, default: null },
   },
   { timestamps: true }
 );

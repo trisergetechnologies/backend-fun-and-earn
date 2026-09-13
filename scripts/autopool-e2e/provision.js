@@ -48,7 +48,11 @@ async function userGet(ctx, token, path) {
 }
 
 async function userPost(ctx, token, path, body) {
-  return ctx.http.post(`/autopool/user${path}`, body, { headers: withAuth(token) });
+  const payload = { ...(body || {}) };
+  if (String(path).includes('/pools/1/join') && payload.legalNoticeAccepted === undefined) {
+    payload.legalNoticeAccepted = true;
+  }
+  return ctx.http.post(`/autopool/user${path}`, payload, { headers: withAuth(token) });
 }
 
 async function snapshotUser(ctx, user) {

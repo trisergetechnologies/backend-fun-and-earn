@@ -76,7 +76,7 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
     }
 
     const balance = await getBalance(userId, session);
-    if (balance < 1) {
+    if (balance < 2) {
       const err = new Error('Insufficient upgrade credits');
       err.code = 'NO_UPGRADE_CREDIT';
       throw err;
@@ -84,7 +84,7 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
 
     await consumeCredit({
       userId,
-      amount: 1,
+      amount: 2,
       idempotencyKey: `credit-spend:${key}`,
       joinIdempotencyKey: key,
       reason: `join_pool_${level}`,

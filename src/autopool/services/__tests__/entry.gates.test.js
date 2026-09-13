@@ -13,8 +13,10 @@ function validateEntryGates({
   userSerial,
   referrerExists,
   referrerOccupying,
+  legalNoticeAccepted,
 }) {
   if (!enabled) return { ok: false, code: 'AUTOPOOL_DISABLED' };
+  if (!legalNoticeAccepted) return { ok: false, code: 'LEGAL_NOTICE_REQUIRED' };
   if (!hasPackage) return { ok: false, code: 'NO_PACKAGE' };
   if (occupyingPool1) return { ok: false, code: 'POOL_OCCUPYING' };
   if (walletBalance < entryAmount) return { ok: false, code: 'INSUFFICIENT_WALLET' };
@@ -35,10 +37,17 @@ describe('entry.service gate behavior', () => {
     userSerial: 1,
     referrerExists: true,
     referrerOccupying: true,
+    legalNoticeAccepted: true,
   };
 
   test('happy path allowed', () => {
     expect(validateEntryGates(base)).toEqual({ ok: true });
+  });
+
+  test('legal notice required', () => {
+    expect(validateEntryGates({ ...base, legalNoticeAccepted: false }).code).toBe(
+      'LEGAL_NOTICE_REQUIRED'
+    );
   });
 
   test('no package blocked', () => {
