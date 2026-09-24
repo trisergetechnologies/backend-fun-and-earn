@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const PaymentIntent = require('../eCart/models/PaymentIntent');
 const Order = require('../eCart/models/Order');
 const Product = require('../eCart/models/Product');
+const Cart = require('../eCart/models/Cart');
 const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const cron = require('node-cron');
@@ -51,12 +52,12 @@ async function reconcileRazorpayPayments() {
       }
 
       // 2️⃣ Check if any succeeded
-      const anyCaptured = payments.items.some(p => p.status === 'captured');
+      const capturedPayment = payments.items.find(p => p.status === 'captured');
       const allFailed = payments.items.every(p => p.status === 'failed' || p.status === 'created');
 
-      if (anyCaptured) {
-        // console.log(`[Reconcile] Payment already captured for intent ${intent._id}`);
-        continue; // webhook likely processed this
+      if (capturedPayment) {
+        await markAsPaid(intent, capturedPayment);
+        continue;
       }
 
       if (allFailed) {
@@ -71,6 +72,62 @@ async function reconcileRazorpayPayments() {
   }
 
   // console.log(`[Reconcile] Razorpay reconciliation complete.`);
+}
+
+/**
+ * Mirror webhook handlePaymentCaptured: intent → captured, order → paid.
+ * Does NOT touch isPackageCronProcessed (packageBuyCron handles package).
+ */
+async function markAsPaid(intent, capturedPayment) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const freshIntent = await PaymentIntent.findById(intent._id).session(session);
+    if (!freshIntent) throw new Error('PaymentIntent not found');
+
+    const order = await Order.findById(freshIntent.referenceId).session(session);
+    if (!order) throw new Error('Order not found for PaymentIntent');
+
+    // Idempotent: already paid/captured (e.g. webhook won the race)
+    if (freshIntent.status === 'captured' || order.paymentStatus === 'paid') {
+      await session.commitTransaction();
+      session.endSession();
+      console.log(`[Reconcile] Intent ${freshIntent._id} already paid/captured — skip`);
+      return;
+    }
+
+    const paymentId = capturedPayment.id;
+
+    freshIntent.status = 'captured';
+    freshIntent.razorpayPaymentId = paymentId;
+    freshIntent.meta = freshIntent.meta || {};
+    freshIntent.meta.reconciledAt = new Date();
+    freshIntent.meta.reconcileNote = 'Marked paid via reconcile (Razorpay captured)';
+    await freshIntent.save({ session });
+
+    order.paymentStatus = 'paid';
+    order.status = 'placed';
+    order.paymentInfo = order.paymentInfo || {};
+    order.paymentInfo.paymentId = paymentId;
+    order.paymentInfo.gateway = 'razorpay';
+    order.finalAmountPaid = freshIntent.amount;
+    order.trackingUpdates.push({
+      status: 'placed',
+      note: 'Auto-confirmed via Razorpay reconcile job'
+    });
+    await order.save({ session });
+
+    await Cart.deleteOne({ userId: order.buyerId }).session(session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    console.log(`[Reconcile] Marked intent ${freshIntent._id} / order ${order._id} as paid (payment ${paymentId})`);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error(`[Reconcile] Failed to mark intent ${intent._id} as paid:`, err.message);
+  }
 }
 
 async function markAsFailed(intent, reason) {
