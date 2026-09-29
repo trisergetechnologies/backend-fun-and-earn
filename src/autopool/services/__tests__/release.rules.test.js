@@ -5,7 +5,7 @@ const {
 } = require('../release.rules');
 
 describe('release.rules', () => {
-  test('pools 1-10 not released at 5/5 without upgradeUsedAt', () => {
+  test('pools 1-12 not released at 5/5 without upgradeUsedAt', () => {
     expect(
       isPoolReleased({
         poolLevel: 1,
@@ -17,7 +17,7 @@ describe('release.rules', () => {
     ).toBe(false);
   });
 
-  test('pools 1-10 released at 5/5 with upgradeUsedAt', () => {
+  test('pools 1-12 released at 5/5 with upgradeUsedAt', () => {
     expect(
       isPoolReleased({
         poolLevel: 1,
@@ -29,10 +29,10 @@ describe('release.rules', () => {
     ).toBe(true);
   });
 
-  test('Pool 11 released at 5/5 without upgrade', () => {
+  test('Pool 13 released at 5/5 without upgrade', () => {
     expect(
       isPoolReleased({
-        poolLevel: 11,
+        poolLevel: 13,
         cycleCount: 5,
         upgradeUsedAt: null,
         releasedAt: null,
@@ -87,7 +87,7 @@ describe('release.rules', () => {
     ).toBeInstanceOf(Date);
     expect(
       shouldReleaseAfterCycle15({
-        poolLevel: 11,
+        poolLevel: 13,
         upgradeUsedAt: null,
       })
     ).toBeInstanceOf(Date);

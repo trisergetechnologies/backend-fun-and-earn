@@ -11,6 +11,8 @@ const DEFAULT_POOLS = [
   { poolLevel: 9, entryAmount: 256000 },
   { poolLevel: 10, entryAmount: 512000 },
   { poolLevel: 11, entryAmount: 1024000 },
+  { poolLevel: 12, entryAmount: 2048000 },
+  { poolLevel: 13, entryAmount: 4096000 },
 ];
 
 const DEFAULT_DISTRIBUTION = {

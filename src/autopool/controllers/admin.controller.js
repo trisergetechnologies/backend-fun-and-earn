@@ -252,7 +252,7 @@ exports.getEligibilities = async (req, res) => {
  */
 exports.getMatrix = async (req, res) => {
   try {
-    const poolLevel = Math.min(11, Math.max(1, Number(req.query.poolLevel) || 1));
+    const poolLevel = Math.min(13, Math.max(1, Number(req.query.poolLevel) || 1));
 
     const [placements, participations, recentCycles, balances, occupying] =
       await Promise.all([

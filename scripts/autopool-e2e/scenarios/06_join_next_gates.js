@@ -45,30 +45,30 @@ module.exports = {
     const credOnly = await provision(ctx, { tag: 'j2', eCartBalance: 5000 });
     await clearE2eTree(ctx);
     await adminPost(ctx, '/e2e/bootstrap-pool', { email: credOnly.email, poolLevel: 1 });
-    await earnCredit(ctx, credOnly, 2);
+    await earnCredit(ctx, credOnly, 1);
     const j2 = await userPost(ctx, credOnly.token, '/pools/2/join-next', {
       idempotencyKey: `j2-${credOnly.userId}`,
     });
     expectStatus(j2, 400);
     expectCode(j2, 'NO_ELIGIBILITY');
 
-    // J3: eligibility + 2 credits → join pool 2
+    // J3: eligibility + 1 credit → join pool 2
     const subject = await provision(ctx, { tag: 'j3', eCartBalance: 20000 });
     await clearE2eTree(ctx);
     await adminPost(ctx, '/e2e/bootstrap-pool', { email: subject.email, poolLevel: 1 });
     await fillCycles(ctx, subject, 1, 5);
-    await earnCredit(ctx, subject, 2);
+    await earnCredit(ctx, subject, 1);
 
     const before = await userGet(ctx, subject.token, '/credits');
     const balBefore = before.data?.data?.balance ?? 0;
-    expect(balBefore >= 2, 'has 2 credits');
+    expect(balBefore >= 1, 'has 1 credit');
 
     const j3 = await userPost(ctx, subject.token, '/pools/2/join-next', {
       idempotencyKey: `j3-${subject.userId}`,
     });
     expect([200, 201].includes(j3.status), `join2 ${j3.status} ${JSON.stringify(j3.data)}`);
     const after = await userGet(ctx, subject.token, '/credits');
-    expectEq(after.data?.data?.balance, balBefore - 2, 'credit -2');
+    expectEq(after.data?.data?.balance, balBefore - 1, 'credit -1');
 
     const ov = await userGet(ctx, subject.token, '/overview');
     const pool2 = (ov.data?.data?.pools || []).find((p) => p.poolLevel === 2);

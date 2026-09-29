@@ -25,7 +25,7 @@ function computeCycleDistribution({ participation, cycleNumber }) {
   }
 
   const isFinalCycle = cycleNumber >= maxCycles;
-  const isLastPool = poolLevel === 11;
+  const isLastPool = poolLevel === 13;
   const nextPoolWindowClosed = cycleNumber > 5; // unused while maxCycles is 5
 
   // Redirect next-pool share to Feature on the last pool, or after the 5-cycle funding window

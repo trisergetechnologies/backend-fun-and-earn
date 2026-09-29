@@ -1,7 +1,7 @@
 /**
  * Passing means: join-next requires money eligibility + credit + free target;
  * one historical referral does not unlock unlimited upgrades (credit must be spent each time).
- * Join Next Pool consumes exactly 2 upgrade credits.
+ * Join Next Pool consumes exactly 1 upgrade credit.
  */
 
 function validateJoinNext({
@@ -13,31 +13,20 @@ function validateJoinNext({
   if (!enabled) return { ok: false, code: 'AUTOPOOL_DISABLED' };
   if (targetOccupying) return { ok: false, code: 'TARGET_OCCUPYING' };
   if (!hasEligibility) return { ok: false, code: 'NO_ELIGIBILITY' };
-  if (creditBalance < 2) return { ok: false, code: 'NO_UPGRADE_CREDIT' };
-  return { ok: true, consumeCredit: 2 };
+  if (creditBalance < 1) return { ok: false, code: 'NO_UPGRADE_CREDIT' };
+  return { ok: true, consumeCredit: 1 };
 }
 
 describe('joinNext + credit behavior', () => {
-  test('all gates pass consumes two credits', () => {
-    expect(
-      validateJoinNext({
-        enabled: true,
-        targetOccupying: false,
-        hasEligibility: true,
-        creditBalance: 2,
-      })
-    ).toEqual({ ok: true, consumeCredit: 2 });
-  });
-
-  test('one credit blocks even with eligibility', () => {
+  test('all gates pass consumes one credit', () => {
     expect(
       validateJoinNext({
         enabled: true,
         targetOccupying: false,
         hasEligibility: true,
         creditBalance: 1,
-      }).code
-    ).toBe('NO_UPGRADE_CREDIT');
+      })
+    ).toEqual({ ok: true, consumeCredit: 1 });
   });
 
   test('zero credits blocks even with eligibility', () => {
@@ -62,8 +51,8 @@ describe('joinNext + credit behavior', () => {
     ).toBe('TARGET_OCCUPYING');
   });
 
-  test('two upgrades need four credits', () => {
-    let credits = 3;
+  test('two upgrades need two credits', () => {
+    let credits = 1;
     const first = validateJoinNext({
       enabled: true,
       targetOccupying: false,

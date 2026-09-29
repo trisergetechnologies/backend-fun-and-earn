@@ -44,7 +44,7 @@ module.exports = {
     await clearE2eTree(ctx);
     await adminPost(ctx, '/e2e/bootstrap-pool', { email: b.email, poolLevel: 1 });
     await fillCycles(ctx, b, 1, 5);
-    await earnCredit(ctx, b, 2);
+    await earnCredit(ctx, b, 1);
     const join2 = await userPost(ctx, b.token, '/pools/2/join-next', {
       idempotencyKey: `r1j2-${b.userId}`,
     });

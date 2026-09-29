@@ -64,12 +64,12 @@ describe('cycleMath.computeCycleDistribution', () => {
     expect(d.isFinalCycle).toBe(false);
   });
 
-  test('Pool 11 always redirects next-pool to Feature; cycle 1 no eligibility', () => {
+  test('Pool 13 always redirects next-pool to Feature; cycle 1 no eligibility', () => {
     const d = computeCycleDistribution({
       participation: baseParticipation({
-        poolLevel: 11,
+        poolLevel: 13,
         configSnapshot: {
-          entryAmount: 1024000,
+          entryAmount: 4096000,
           collectionMultiplier: 2,
           maxCycles: 5,
           samePoolPercent: 50,
@@ -83,6 +83,6 @@ describe('cycleMath.computeCycleDistribution', () => {
     });
     expect(d.createsEligibility).toBe(false);
     expect(d.nextPoolAmount).toBe(0);
-    expect(d.collectionAmount).toBe(2048000);
+    expect(d.collectionAmount).toBe(8192000);
   });
 });

@@ -18,7 +18,7 @@ const ConfigSnapshotSchema = new mongoose.Schema(
 const AutopoolParticipationSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    poolLevel: { type: Number, required: true, min: 1, max: 11 },
+    poolLevel: { type: Number, required: true, min: 1, max: 13 },
     status: {
       type: String,
       enum: ['PENDING', 'ACTIVE', 'COMPLETED'],

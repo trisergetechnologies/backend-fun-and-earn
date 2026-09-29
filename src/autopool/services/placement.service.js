@@ -342,7 +342,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
 
   await parentParticipation.save({ session });
 
-  if (dist.isFinalCycle && parentParticipation.poolLevel === 11) {
+  if (dist.isFinalCycle && parentParticipation.poolLevel === 13) {
     await maybeResetCreditsAfterPool10({
       userId: parentParticipation.userId,
       pool10ParticipationId: parentParticipation._id,

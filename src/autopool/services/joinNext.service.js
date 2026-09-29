@@ -22,8 +22,8 @@ function makeId(prefix) {
 
 async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
   const level = Number(targetPoolLevel);
-  if (!Number.isInteger(level) || level < 2 || level > 11) {
-    const err = new Error('Target pool must be 2–11');
+  if (!Number.isInteger(level) || level < 2 || level > 13) {
+    const err = new Error('Target pool must be 2–13');
     err.code = 'INVALID_POOL';
     throw err;
   }
@@ -76,7 +76,7 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
     }
 
     const balance = await getBalance(userId, session);
-    if (balance < 2) {
+    if (balance < 1) {
       const err = new Error('Insufficient upgrade credits');
       err.code = 'NO_UPGRADE_CREDIT';
       throw err;
@@ -84,7 +84,7 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
 
     await consumeCredit({
       userId,
-      amount: 2,
+      amount: 1,
       idempotencyKey: `credit-spend:${key}`,
       joinIdempotencyKey: key,
       reason: `join_pool_${level}`,

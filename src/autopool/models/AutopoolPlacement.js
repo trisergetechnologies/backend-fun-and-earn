@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const AutopoolPlacementSchema = new mongoose.Schema(
   {
-    poolLevel: { type: Number, required: true, min: 1, max: 11, index: true },
+    poolLevel: { type: Number, required: true, min: 1, max: 13, index: true },
     participationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AutopoolParticipation',
