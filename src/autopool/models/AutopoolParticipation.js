@@ -4,7 +4,7 @@ const ConfigSnapshotSchema = new mongoose.Schema(
   {
     entryAmount: { type: Number, required: true },
     collectionMultiplier: { type: Number, default: 2 },
-    maxCycles: { type: Number, default: 10 },
+    maxCycles: { type: Number, default: 5 },
     samePoolPercent: { type: Number, default: 50 },
     walletPercent: { type: Number, default: 20 },
     nextPoolPercent: { type: Number, default: 20 },
@@ -18,7 +18,7 @@ const ConfigSnapshotSchema = new mongoose.Schema(
 const AutopoolParticipationSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    poolLevel: { type: Number, required: true, min: 1, max: 10 },
+    poolLevel: { type: Number, required: true, min: 1, max: 11 },
     status: {
       type: String,
       enum: ['PENDING', 'ACTIVE', 'COMPLETED'],

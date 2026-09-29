@@ -175,7 +175,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
   }
 
   const nextCycleNumber = (parentParticipation.cycleCount || 0) + 1;
-  const maxCycles = parentParticipation.configSnapshot?.maxCycles ?? 10;
+  const maxCycles = parentParticipation.configSnapshot?.maxCycles ?? 5;
   if (nextCycleNumber > maxCycles) {
     return null;
   }
@@ -342,7 +342,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
 
   await parentParticipation.save({ session });
 
-  if (dist.isFinalCycle && parentParticipation.poolLevel === 10) {
+  if (dist.isFinalCycle && parentParticipation.poolLevel === 11) {
     await maybeResetCreditsAfterPool10({
       userId: parentParticipation.userId,
       pool10ParticipationId: parentParticipation._id,

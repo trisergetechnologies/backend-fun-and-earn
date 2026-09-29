@@ -7,7 +7,7 @@ function computeCycleDistribution({ participation, cycleNumber }) {
   const entry = snap.entryAmount;
   const mult = snap.collectionMultiplier ?? 2;
   const collectionAmount = entry * mult;
-  const maxCycles = snap.maxCycles ?? 10;
+  const maxCycles = snap.maxCycles ?? 5;
   const poolLevel = participation.poolLevel;
 
   const pct = (p) => Math.floor((collectionAmount * p) / 100);
@@ -25,16 +25,16 @@ function computeCycleDistribution({ participation, cycleNumber }) {
   }
 
   const isFinalCycle = cycleNumber >= maxCycles;
-  const isPool10 = poolLevel === 10;
-  const nextPoolWindowClosed = cycleNumber > 5; // after first 5 cycles
+  const isLastPool = poolLevel === 11;
+  const nextPoolWindowClosed = cycleNumber > 5; // unused while maxCycles is 5
 
-  // Redirect next-pool share to Feature when Pool 10 OR cycles 6+
-  if (isPool10 || nextPoolWindowClosed) {
+  // Redirect next-pool share to Feature on the last pool, or after the 5-cycle funding window
+  if (isLastPool || nextPoolWindowClosed) {
     featureAmount += nextPoolAmount;
     nextPoolAmount = 0;
   }
 
-  // Final cycle (e.g. Cycle 10): same-pool continuation → Feature
+  // Final cycle: same-pool continuation → Feature
   if (isFinalCycle) {
     featureAmount += samePoolAmount;
     samePoolAmount = 0;
@@ -48,7 +48,7 @@ function computeCycleDistribution({ participation, cycleNumber }) {
     adminAmount,
     featureAmount,
     isFinalCycle,
-    createsEligibility: !isPool10 && cycleNumber === 5,
+    createsEligibility: !isLastPool && cycleNumber === 5,
   };
 }
 

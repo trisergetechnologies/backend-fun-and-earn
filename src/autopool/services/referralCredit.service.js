@@ -89,7 +89,7 @@ async function consumeCredit({ userId, amount = 1, idempotencyKey, joinIdempoten
 }
 
 /**
- * After Pool 10 15/15: reset credits to 0 if no other occupying pools.
+ * After Pool 11 reaches max cycles: reset credits to 0 if no other occupying pools.
  */
 async function maybeResetCreditsAfterPool10({ userId, pool10ParticipationId, session }) {
   const idempotencyKey = `credit-reset:pool10:${pool10ParticipationId}`;

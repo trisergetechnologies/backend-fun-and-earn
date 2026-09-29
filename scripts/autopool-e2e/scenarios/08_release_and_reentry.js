@@ -16,16 +16,16 @@ async function earnCredit(ctx, beneficiary, times = 1) {
 
 module.exports = {
   id: 'R_release',
-  title: 'Release gate — re-entry blocked until upgrade used + 10/10',
+  title: 'Release gate — re-entry blocked until upgrade used + 5/5',
   intent: 'Docs §8.1 release; edge case 2 vs not-released',
   async run(ctx) {
-    // Path A: complete 10 without upgrade → blocked re-entry
+    // Path A: complete 5 without upgrade → blocked re-entry
     const a = await provision(ctx, { tag: 'r2', eCartBalance: 50000 });
     await clearE2eTree(ctx);
     await adminPost(ctx, '/e2e/bootstrap-pool', { email: a.email, poolLevel: 1 });
-    await fillCycles(ctx, a, 1, 10);
+    await fillCycles(ctx, a, 1, 5);
     const pA = await userGet(ctx, a.token, '/pools/1');
-    expectEq(pA.data?.data?.participation?.cycleCount, 10, 'A at 10');
+    expectEq(pA.data?.data?.participation?.cycleCount, 5, 'A at 5');
     expect(!pA.data?.data?.participation?.upgradeUsedAt, 'upgrade unused');
     expect(!pA.data?.data?.participation?.releasedAt, 'not released');
 
@@ -39,7 +39,7 @@ module.exports = {
     expectCode(reA, 'POOL_OCCUPYING');
     expectEq(await getWallet(ctx, a), walletBefore, 'no debit when blocked');
 
-    // Path B: upgrade used then finish 15 → released → re-enter ok
+    // Path B: finish 5, then use upgrade → released → re-enter ok
     const b = await provision(ctx, { tag: 'r1', eCartBalance: 50000 });
     await clearE2eTree(ctx);
     await adminPost(ctx, '/e2e/bootstrap-pool', { email: b.email, poolLevel: 1 });
@@ -50,10 +50,11 @@ module.exports = {
     });
     expect([200, 201].includes(join2.status), `join P2 ${JSON.stringify(join2.data)}`);
 
-    const partB = await fillCycles(ctx, b, 1, 10);
+    const pB = await userGet(ctx, b.token, '/pools/1');
+    const partB = pB.data?.data?.participation;
     expect(partB.upgradeUsedAt, 'B upgrade used');
-    expect(partB.releasedAt, 'B released after 10+upgrade');
-    expectEq(partB.cycleCount, 10, 'B at 10');
+    expect(partB.releasedAt, 'B released after 5+upgrade');
+    expectEq(partB.cycleCount, 5, 'B at 5');
 
     await ensureRootOccupying(ctx);
     const reB = await userPost(ctx, b.token, '/pools/1/join', {

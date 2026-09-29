@@ -13,10 +13,10 @@ const DistributionSchema = new mongoose.Schema(
 
 const AutopoolPoolConfigSchema = new mongoose.Schema(
   {
-    poolLevel: { type: Number, required: true, min: 1, max: 10, unique: true },
+    poolLevel: { type: Number, required: true, min: 1, max: 11, unique: true },
     entryAmount: { type: Number, required: true, min: 0 },
     collectionMultiplier: { type: Number, default: 2 },
-    maxCycles: { type: Number, default: 10 },
+    maxCycles: { type: Number, default: 5 },
     distribution: { type: DistributionSchema, default: () => ({}) },
     active: { type: Boolean, default: true },
     configVersion: { type: Number, default: 1 },

@@ -6,7 +6,7 @@ function baseParticipation(overrides = {}) {
     configSnapshot: {
       entryAmount: 500,
       collectionMultiplier: 2,
-      maxCycles: 10,
+      maxCycles: 5,
       samePoolPercent: 50,
       walletPercent: 20,
       nextPoolPercent: 20,
@@ -35,45 +35,43 @@ describe('cycleMath.computeCycleDistribution', () => {
     ).toBe(1000);
   });
 
-  test('cycle 5 creates eligibility and keeps next-pool amount', () => {
+  test('cycle 5 is final, keeps next-pool amount, and sends same-pool to Feature', () => {
     const d = computeCycleDistribution({
       participation: baseParticipation(),
       cycleNumber: 5,
     });
+    expect(d.isFinalCycle).toBe(true);
     expect(d.createsEligibility).toBe(true);
     expect(d.nextPoolAmount).toBe(200);
+    expect(d.samePoolAmount).toBe(0);
+    expect(d.walletAmount).toBe(200);
+    expect(d.featureAmount).toBe(50 + 500);
   });
 
-  test('cycle 6 redirects next-pool 20% to Feature', () => {
+  test('cycle 6 redirects next-pool 20% to Feature when maxCycles is higher', () => {
     const d = computeCycleDistribution({
-      participation: baseParticipation(),
+      participation: baseParticipation({
+        configSnapshot: {
+          ...baseParticipation().configSnapshot,
+          maxCycles: 10,
+        },
+      }),
       cycleNumber: 6,
     });
     expect(d.nextPoolAmount).toBe(0);
     expect(d.featureAmount).toBe(50 + 200);
     expect(d.samePoolAmount).toBe(500);
+    expect(d.isFinalCycle).toBe(false);
   });
 
-  test('cycle 10 sends same-pool and next-pool to Feature', () => {
-    const d = computeCycleDistribution({
-      participation: baseParticipation(),
-      cycleNumber: 10,
-    });
-    expect(d.isFinalCycle).toBe(true);
-    expect(d.samePoolAmount).toBe(0);
-    expect(d.nextPoolAmount).toBe(0);
-    expect(d.walletAmount).toBe(200);
-    expect(d.featureAmount).toBe(50 + 200 + 500);
-  });
-
-  test('Pool 10 always redirects next-pool to Feature; cycle 1 no eligibility', () => {
+  test('Pool 11 always redirects next-pool to Feature; cycle 1 no eligibility', () => {
     const d = computeCycleDistribution({
       participation: baseParticipation({
-        poolLevel: 10,
+        poolLevel: 11,
         configSnapshot: {
-          entryAmount: 256000,
+          entryAmount: 1024000,
           collectionMultiplier: 2,
-          maxCycles: 10,
+          maxCycles: 5,
           samePoolPercent: 50,
           walletPercent: 20,
           nextPoolPercent: 20,
@@ -85,6 +83,6 @@ describe('cycleMath.computeCycleDistribution', () => {
     });
     expect(d.createsEligibility).toBe(false);
     expect(d.nextPoolAmount).toBe(0);
-    expect(d.collectionAmount).toBe(512000);
+    expect(d.collectionAmount).toBe(2048000);
   });
 });

@@ -22,8 +22,8 @@ function makeId(prefix) {
 
 async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
   const level = Number(targetPoolLevel);
-  if (!Number.isInteger(level) || level < 2 || level > 10) {
-    const err = new Error('Target pool must be 2–10');
+  if (!Number.isInteger(level) || level < 2 || level > 11) {
+    const err = new Error('Target pool must be 2–11');
     err.code = 'INVALID_POOL';
     throw err;
   }

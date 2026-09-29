@@ -252,7 +252,7 @@ exports.getEligibilities = async (req, res) => {
  */
 exports.getMatrix = async (req, res) => {
   try {
-    const poolLevel = Math.min(10, Math.max(1, Number(req.query.poolLevel) || 1));
+    const poolLevel = Math.min(11, Math.max(1, Number(req.query.poolLevel) || 1));
 
     const [placements, participations, recentCycles, balances, occupying] =
       await Promise.all([
@@ -337,7 +337,7 @@ exports.getMatrix = async (req, res) => {
         user: userMap[String(pl.userId)] || null,
         parentUser: parentUserResolved,
         cycleCount: part?.cycleCount ?? null,
-        maxCycles: part?.configSnapshot?.maxCycles ?? 10,
+        maxCycles: part?.configSnapshot?.maxCycles ?? 5,
         participationStatus: part?.status ?? null,
         isCurrentSeat: currentPlacementIds.has(String(pl._id)),
         filledAt: pl.filledAt,
@@ -520,7 +520,7 @@ exports.getParticipationJourney = async (req, res) => {
     );
 
     // Waiting queue position & cycle projection calculation
-    const maxCycles = participation.configSnapshot?.maxCycles ?? 10;
+    const maxCycles = participation.configSnapshot?.maxCycles ?? 5;
     const cycleCount = participation.cycleCount || 0;
     const isMaxCyclesReached = cycleCount >= maxCycles;
 
