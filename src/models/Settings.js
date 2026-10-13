@@ -12,9 +12,14 @@ const SettingsSchema = new mongoose.Schema({
   },
   deliveryChargeAmount: { type: Number, default: 0 },
   freeDeliveryAbove: { type: Number, default: 500 },
-  /** Reels / Unity LevelPlay */
+  /** Reels ads: levelplay (default) or startio */
   adsDailyInterstitialLimit: { type: Number, default: 5 },
   adsBannerEnabled: { type: Boolean, default: true },
+  adsProvider: {
+    type: String,
+    enum: ['levelplay', 'startio'],
+    default: 'levelplay',
+  },
   /** Dream Mart / AdMob */
   dreamMartAdsDailyInterstitialLimit: { type: Number, default: 1 },
   dreamMartAdsMinGapSeconds: { type: Number, default: 1800 },

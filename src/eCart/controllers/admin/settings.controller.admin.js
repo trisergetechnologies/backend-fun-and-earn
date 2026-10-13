@@ -2,6 +2,7 @@ const Settings = require('../../../models/Settings');
 const {
   validateAdsSettingsUpdate,
   clampDailyLimit,
+  normalizeAdProvider,
 } = require('../../../shortVideo/services/adsPolicy.service');
 const {
   validateDreamMartAdsSettingsUpdate,
@@ -41,6 +42,7 @@ exports.updateSettings = async (req, res) => {
       'freeDeliveryAbove',
       'adsDailyInterstitialLimit',
       'adsBannerEnabled',
+      'adsProvider',
       'dreamMartAdsDailyInterstitialLimit',
       'dreamMartAdsMinGapSeconds',
       'dreamMartAdsBannerEnabled',
@@ -81,6 +83,9 @@ exports.updateSettings = async (req, res) => {
       updateData.adsDailyInterstitialLimit = clampDailyLimit(
         updateData.adsDailyInterstitialLimit
       );
+    }
+    if (updateData.adsProvider !== undefined) {
+      updateData.adsProvider = normalizeAdProvider(updateData.adsProvider);
     }
     applyDreamMartAdsClamps(updateData);
     updateData.updatedAt = Date.now();

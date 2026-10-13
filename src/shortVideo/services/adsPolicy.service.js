@@ -5,6 +5,8 @@ const { getIstDateKey, getIstTodayRange } = require('../../utils/istRange');
 const MIN_DAILY_LIMIT = 5;
 const MAX_DAILY_LIMIT = 20;
 const DEFAULT_DAILY_LIMIT = 5;
+const AD_PROVIDERS = ['levelplay', 'startio'];
+const DEFAULT_AD_PROVIDER = 'levelplay';
 
 async function getOrCreateSettings() {
   let settings = await Settings.findOne();
@@ -20,6 +22,11 @@ function clampDailyLimit(raw) {
   return Math.min(MAX_DAILY_LIMIT, Math.max(MIN_DAILY_LIMIT, n));
 }
 
+function normalizeAdProvider(raw) {
+  const value = String(raw || '').toLowerCase().trim();
+  return AD_PROVIDERS.includes(value) ? value : DEFAULT_AD_PROVIDER;
+}
+
 function getAdsConfigFromSettings(settings) {
   const dailyLimit = clampDailyLimit(
     settings?.adsDailyInterstitialLimit ?? DEFAULT_DAILY_LIMIT
@@ -28,7 +35,8 @@ function getAdsConfigFromSettings(settings) {
     settings?.adsBannerEnabled === undefined
       ? true
       : Boolean(settings.adsBannerEnabled);
-  return { dailyLimit, bannerEnabled };
+  const provider = normalizeAdProvider(settings?.adsProvider);
+  return { dailyLimit, bannerEnabled, provider };
 }
 
 async function getUserAdUsage(userId) {
@@ -40,7 +48,7 @@ async function getUserAdUsage(userId) {
 
 async function buildAdConfigPayload(userId) {
   const settings = await getOrCreateSettings();
-  const { dailyLimit, bannerEnabled } = getAdsConfigFromSettings(settings);
+  const { dailyLimit, bannerEnabled, provider } = getAdsConfigFromSettings(settings);
   const { usedToday } = await getUserAdUsage(userId);
   const { endUtc } = getIstTodayRange();
   const remainingToday = Math.max(0, dailyLimit - usedToday);
@@ -48,6 +56,7 @@ async function buildAdConfigPayload(userId) {
   return {
     dailyLimit,
     bannerEnabled,
+    provider,
     usedToday,
     remainingToday,
     resetsAt: endUtc.toISOString(),
@@ -112,6 +121,9 @@ function validateAdsSettingsUpdate(body) {
   ) {
     errors.push('adsBannerEnabled must be a boolean');
   }
+  if (body.adsProvider !== undefined && !AD_PROVIDERS.includes(body.adsProvider)) {
+    errors.push('adsProvider must be levelplay or startio');
+  }
   return errors;
 }
 
@@ -119,7 +131,9 @@ module.exports = {
   MIN_DAILY_LIMIT,
   MAX_DAILY_LIMIT,
   DEFAULT_DAILY_LIMIT,
+  DEFAULT_AD_PROVIDER,
   clampDailyLimit,
+  normalizeAdProvider,
   getOrCreateSettings,
   getAdsConfigFromSettings,
   buildAdConfigPayload,
