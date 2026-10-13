@@ -20,6 +20,9 @@ function parseVariations(body) {
 function stripSellerForbiddenFields(body) {
   const cleaned = { ...body };
   delete cleaned.isSpecial;
+  delete cleaned.couponEligible;
+  delete cleaned.couponWallet;
+  delete cleaned.couponAmount;
   delete cleaned.sellerId;
   delete cleaned.createdByRole;
   delete cleaned.images;

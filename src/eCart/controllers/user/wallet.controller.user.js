@@ -207,28 +207,35 @@ exports.redeemCoupon = async (req, res) => {
     }
 
     const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({
+        success: false,
+        message: 'Something went wrong. Please try again.',
+        data: null
+      });
+    }
 
-    // Update wallet
-    user.wallets.eCartWallet += coupon.value;
+    const wallet = (coupon.creditWallet === 'eCartWallet' || coupon.creditWallet === 'shortVideoWallet')
+      ? coupon.creditWallet
+      : 'eCartWallet';
 
-    // Remove from rewardWallet
+    user.wallets[wallet] = (user.wallets[wallet] || 0) + coupon.value;
+
     user.wallets.rewardWallet = user.wallets.rewardWallet.filter(id => id.toString() !== coupon._id.toString());
     await user.save();
 
-    // Record wallet transaction
     await WalletTransaction.create({
       userId,
       type: 'earn',
       source: 'coupon',
       fromWallet: 'reward',
-      toWallet: 'eCartWallet',
+      toWallet: wallet,
       amount: coupon.value,
       status: 'success',
       triggeredBy: 'user',
       notes: `Redeemed coupon: ${coupon.code}`
     });
 
-    // Remove coupon
     await Coupon.findByIdAndDelete(coupon._id);
 
     res.status(200).json({
@@ -240,7 +247,7 @@ exports.redeemCoupon = async (req, res) => {
     console.error('Redeem error:', err);
     res.status(500).json({
       success: false,
-      message: 'Server error',
+      message: 'Something went wrong. Please try again.',
       data: null
     });
   }

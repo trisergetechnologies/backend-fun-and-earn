@@ -10,6 +10,7 @@ const Product = require('../eCart/models/Product');
 const Cart = require('../eCart/models/Cart');
 const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
+const issueProductCoupons = require('../eCart/helpers/issueProductCoupons');
 const cron = require('node-cron');
 
 require('dotenv').config();
@@ -90,9 +91,11 @@ async function markAsPaid(intent, capturedPayment) {
 
     // Idempotent: already paid/captured (e.g. webhook won the race)
     if (freshIntent.status === 'captured' || order.paymentStatus === 'paid') {
+      const paidOrderId = order._id;
       await session.commitTransaction();
       session.endSession();
       console.log(`[Reconcile] Intent ${freshIntent._id} already paid/captured — skip`);
+      await issueProductCoupons(paidOrderId);
       return;
     }
 
@@ -119,10 +122,13 @@ async function markAsPaid(intent, capturedPayment) {
 
     await Cart.deleteOne({ userId: order.buyerId }).session(session);
 
+    const paidOrderId = order._id;
     await session.commitTransaction();
     session.endSession();
 
-    console.log(`[Reconcile] Marked intent ${freshIntent._id} / order ${order._id} as paid (payment ${paymentId})`);
+    await issueProductCoupons(paidOrderId);
+
+    console.log(`[Reconcile] Marked intent ${freshIntent._id} / order ${paidOrderId} as paid (payment ${paymentId})`);
   } catch (err) {
     await session.abortTransaction();
     session.endSession();

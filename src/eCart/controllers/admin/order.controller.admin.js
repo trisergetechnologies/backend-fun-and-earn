@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const ExcelJS = require('exceljs');
 const Order = require('../../models/Order');
-const generateCouponForOrder = require('../../helpers/generateCoupon');
 const {
   generateInvoicePdf,
   isInvoiceEligible,
@@ -264,9 +263,7 @@ exports.updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    if(order.status === 'delivered'){
-      await generateCouponForOrder(order);
-    }
+    // 5% delivery coupons are no longer generated. Existing coupons still redeem.
 
     return res.status(200).json({
       success: true,

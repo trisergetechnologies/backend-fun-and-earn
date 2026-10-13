@@ -6,6 +6,7 @@ const {
   buildImagesForUpdate,
   validateImageCount,
 } = require("../../../utils/productImages");
+const { parseCouponConfig } = require("../../helpers/couponConfig");
 
 exports.addProduct = async (req, res) => {
   try {
@@ -66,6 +67,15 @@ exports.addProduct = async (req, res) => {
       }
     }
 
+    const couponConfig = parseCouponConfig(req.body, { applyDefault: true });
+    if (!couponConfig.ok) {
+      return res.status(200).json({
+        success: false,
+        message: couponConfig.message,
+        data: null,
+      });
+    }
+
     const images = buildImagesForCreate(req);
     const imageCheck = validateImageCount(images.length);
     if (!imageCheck.valid) {
@@ -89,6 +99,13 @@ exports.addProduct = async (req, res) => {
       variations,
       createdByRole: user.role,
       images,
+      couponEligible: couponConfig.fields.couponEligible,
+      ...(couponConfig.fields.couponEligible
+        ? {
+            couponWallet: couponConfig.fields.couponWallet,
+            couponAmount: couponConfig.fields.couponAmount,
+          }
+        : {}),
     });
 
     await newProduct.save();
@@ -231,6 +248,27 @@ exports.updateProduct = async (req, res) => {
     }
     delete req.body.existingImages;
 
+    const couponConfig = parseCouponConfig(req.body, { applyDefault: false });
+    if (!couponConfig.ok) {
+      return res.status(200).json({
+        success: false,
+        message: couponConfig.message,
+        data: null,
+      });
+    }
+    let unsetCoupon = null;
+    if (couponConfig.fields) {
+      req.body.couponEligible = couponConfig.fields.couponEligible;
+      if (couponConfig.fields.couponEligible) {
+        req.body.couponWallet = couponConfig.fields.couponWallet;
+        req.body.couponAmount = couponConfig.fields.couponAmount;
+      } else {
+        delete req.body.couponWallet;
+        delete req.body.couponAmount;
+        unsetCoupon = { couponWallet: 1, couponAmount: 1 };
+      }
+    }
+
     // Parse gst if provided as string
     if (req.body.gst !== undefined && req.body.gst !== '') {
       req.body.gst = parseFloat(req.body.gst);
@@ -247,9 +285,10 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
+    const setFields = { ...req.body, images: mergedImages };
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
-      { ...req.body, images: mergedImages },
+      unsetCoupon ? { $set: setFields, $unset: unsetCoupon } : setFields,
       { new: true, runValidators: true }
     )
       .populate('sellerId', 'name email')

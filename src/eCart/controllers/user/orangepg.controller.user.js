@@ -9,6 +9,7 @@ const Order = require('../../models/Order');
 const Product = require('../../models/Product');
 const User = require('../../../models/User');
 const WalletTransaction = require('../../../models/WalletTransaction');
+const issueProductCoupons = require('../../helpers/issueProductCoupons');
 const {
   ORANGE_MERCHANT_ID,
   generateOrangeHash,
@@ -260,6 +261,7 @@ exports.handleOrangeCallback = async (req, res) => {
     // ============================================================
     if (intent.status === 'captured') {
       console.log('[Orange PG Callback] Already processed as SUCCESS, redirecting...');
+      await issueProductCoupons(addlParam1 || intent.referenceId);
       return res.redirect(`${FRONTEND_URL}/--/success?orderId=${addlParam1 || intent.referenceId}`);
     }
 
@@ -373,6 +375,8 @@ async function handleOrangePaymentSuccess(intent, orderId, paymentDetails) {
     await session.commitTransaction();
     session.endSession();
 
+    await issueProductCoupons(orderId);
+
     console.log(`[Orange PG] ✅ Payment captured for Order ${orderId}, Amount: ${paymentDetails.amount}`);
     
   } catch (err) {
@@ -484,6 +488,7 @@ exports.verifyOrangePaymentStatus = async (req, res) => {
 
     // 2. If already processed, return status
     if (intent.status === 'captured') {
+      await issueProductCoupons(intent.referenceId);
       return res.status(200).json({
         success: true,
         decision: 'SUCCESS',

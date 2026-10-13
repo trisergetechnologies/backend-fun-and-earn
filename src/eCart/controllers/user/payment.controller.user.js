@@ -8,6 +8,7 @@ const Product = require('../../models/Product');
 const PaymentIntent = require('../../models/PaymentIntent');
 const Order = require('../../models/Order');
 const Cart = require('../../models/Cart');
+const issueProductCoupons = require('../../helpers/issueProductCoupons');
 const Razorpay = require('razorpay');
 
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
@@ -95,6 +96,8 @@ exports.verifyPayment = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    await issueProductCoupons(order._id);
+
     return res.status(200).json({
       success: true,
       message: 'Payment verified and order confirmed',
@@ -138,8 +141,10 @@ async function handlePaymentCaptured(intent, paymentPayload) {
     // Already processed?
     if (intent.status === 'captured' || order.paymentStatus === 'paid') {
       console.log(`[Webhook] Order ${order._id} already marked as paid`);
+      const paidOrderId = order._id;
       await session.commitTransaction();
       session.endSession();
+      await issueProductCoupons(paidOrderId);
       return;
     }
 
@@ -166,6 +171,8 @@ async function handlePaymentCaptured(intent, paymentPayload) {
 
     await session.commitTransaction();
     session.endSession();
+
+    await issueProductCoupons(order._id);
 
     console.log(`[Webhook] ✅ Payment captured for Order ${order._id}`);
 

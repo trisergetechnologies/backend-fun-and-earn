@@ -5,6 +5,7 @@ const Product = require('../../models/Product');
 const Cart = require('../../models/Cart');
 const User = require('../../../models/User');
 const WalletTransaction = require('../../../models/WalletTransaction');
+const issueProductCoupons = require('../../helpers/issueProductCoupons');
 const {
   decrypt,
   parseDecryptedResponse,
@@ -36,6 +37,7 @@ async function handleCcavenuePaymentSuccess(intent, orderId, paymentDetails) {
       log('payment_success_skipped', { paymentIntentId: intent._id?.toString(), reason: 'already captured' });
       await session.commitTransaction();
       session.endSession();
+      await issueProductCoupons(orderId);
       return;
     }
 
@@ -76,6 +78,7 @@ async function handleCcavenuePaymentSuccess(intent, orderId, paymentDetails) {
 
     await session.commitTransaction();
     session.endSession();
+    await issueProductCoupons(orderId);
     log('payment_success', {
       paymentIntentId: intent._id?.toString(),
       orderId: orderId?.toString(),

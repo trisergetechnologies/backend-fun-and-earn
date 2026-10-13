@@ -59,7 +59,21 @@ const OrderItemSchema = new mongoose.Schema({
   selectedVariation: [{
     name: { type: String },
     value: { type: String }
-  }]
+  }],
+
+  couponEligible: {
+    type: Boolean,
+    default: false
+  },
+
+  couponWallet: {
+    type: String,
+    enum: ['eCartWallet', 'shortVideoWallet']
+  },
+
+  couponAmount: {
+    type: Number
+  }
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({

@@ -43,6 +43,14 @@ exports.purchasePackage = async (req, res) => {
       return res.status(200).json({ success: false, message: 'Invalid or inactive package' });
     }
 
+    if (user.package && selectedPackage.price <= user.package.price) {
+      await session.abortTransaction();
+      return res.status(200).json({
+        success: false,
+        message: 'You can only upgrade to a higher package',
+      });
+    }
+
     if (user.wallets.shortVideoWallet < selectedPackage.price) {
       await session.abortTransaction();
       return res.status(200).json({ success: false, message: 'Insufficient wallet balance' });
@@ -158,7 +166,8 @@ exports.getPackages = async (req, res) => {
       success: true,
       data: {
         currentPackage,
-        availablePackages
+        availablePackages,
+        packages: allPackages,
       }
     });
   } catch (error) {

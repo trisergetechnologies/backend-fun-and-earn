@@ -7,6 +7,8 @@ const Product = require('../../models/Product');
 const Order = require('../../models/Order');
 const WalletTransaction = require('../../../models/WalletTransaction');
 const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
+const { couponItemSnapshot } = require('../../helpers/couponConfig');
+const issueProductCoupons = require('../../helpers/issueProductCoupons');
 
 const PaymentIntent = require('../../models/PaymentIntent');
 const { generateInvoicePdf } = require('../../helpers/generateInvoicePdf');
@@ -91,7 +93,8 @@ exports.placeOrder = async (req, res) => {
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
         returnPolicyDays: product.returnPolicyDays || 3,
-        selectedVariation: item.selectedVariation || []
+        selectedVariation: item.selectedVariation || [],
+        ...couponItemSnapshot(product)
       });
 
       // Deduct stock
@@ -150,6 +153,8 @@ exports.placeOrder = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    await issueProductCoupons(order._id);
 
     return res.status(200).json({
       success: true,
@@ -311,7 +316,8 @@ exports.createOrderIntent = async (req, res) => {
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
         returnPolicyDays: product.returnPolicyDays || 3,
-        selectedVariation: item.selectedVariation || []
+        selectedVariation: item.selectedVariation || [],
+        ...couponItemSnapshot(product)
       });
     }
 
@@ -632,6 +638,7 @@ exports.createOrderIntent = async (req, res) => {
       }
     } else {
       // remaining === 0 -> wallet-only order already placed and marked paid
+      await issueProductCoupons(orderDoc._id);
       return res.status(200).json({
         success: true,
         message: 'Order placed successfully using wallet only',
@@ -723,7 +730,8 @@ exports.placeOrderWalletOnly = async (req, res) => {
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
         returnPolicyDays: product.returnPolicyDays || 3,
-        selectedVariation: item.selectedVariation || []
+        selectedVariation: item.selectedVariation || [],
+        ...couponItemSnapshot(product)
       });
 
       // Deduct stock
@@ -780,6 +788,8 @@ exports.placeOrderWalletOnly = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    await issueProductCoupons(order._id);
 
     return res.status(200).json({
       success: true,
@@ -1340,7 +1350,8 @@ exports.createOrderIntentOrangePG = async (req, res) => {
         productTitle: product.title,
         productThumbnail: product.images?.[0] || '',
         returnPolicyDays: product.returnPolicyDays || 3,
-        selectedVariation: item.selectedVariation || []
+        selectedVariation: item.selectedVariation || [],
+        ...couponItemSnapshot(product)
       });
     }
 
@@ -1476,6 +1487,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
       });
     } else {
       // Wallet-only payment
+      await issueProductCoupons(orderDoc._id);
       return res.status(200).json({
         success: true,
         message: 'Order placed successfully using wallet only',

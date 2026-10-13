@@ -74,6 +74,20 @@ const ProductSchema = new mongoose.Schema({
     default: false
   },
 
+  couponEligible: {
+    type: Boolean,
+    default: false
+  },
+
+  couponWallet: {
+    type: String,
+    enum: ['eCartWallet', 'shortVideoWallet']
+  },
+
+  couponAmount: {
+    type: Number
+  },
+
   package:{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Package'

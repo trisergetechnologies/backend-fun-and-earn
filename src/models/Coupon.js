@@ -26,6 +26,26 @@ const CouponSchema = new mongoose.Schema({
     ref: 'Order'
   },
 
+  productId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  },
+
+  unitIndex: {
+    type: Number
+  },
+
+  /** Set on product coupons. Old coupons omit this and keep their original redeem wallet. */
+  creditWallet: {
+    type: String,
+    enum: ['eCartWallet', 'shortVideoWallet']
+  },
+
+  /** orderId:productId:unitIndex — unique so payment retries do not mint a second coupon. */
+  issueKey: {
+    type: String
+  },
+
   // Whether coupon is still valid for use
   isActive: {
     type: Boolean,
@@ -52,5 +72,6 @@ const CouponSchema = new mongoose.Schema({
 CouponSchema.index({ earnedBy: 1, createdAt: -1 });
 // Redeem: findOne({ code, earnedBy, isActive, isRedeemed }) — code already unique globally
 CouponSchema.index({ earnedBy: 1, isActive: 1, isRedeemed: 1 });
+CouponSchema.index({ issueKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Coupon', CouponSchema);
