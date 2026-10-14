@@ -37,12 +37,14 @@ try {
   console.error('expireCcavenuePayments failed', e);
 }
 
-try {
-  require('./jobs/packageBuyCron');
-  console.log('packageBuyCron loaded');
-} catch (e) {
-  console.error('packageBuyCron failed', e);
-}
+// Dream Mart special-product package assignment is off.
+// Packages are bought only from Fun & Enjoy via /purchasepackage.
+// try {
+//   require('./jobs/packageBuyCron');
+//   console.log('packageBuyCron loaded');
+// } catch (e) {
+//   console.error('packageBuyCron failed', e);
+// }
 
 try {
   require('./jobs/videoRetentionCron');
