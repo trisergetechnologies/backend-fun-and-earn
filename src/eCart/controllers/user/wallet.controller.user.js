@@ -3,6 +3,8 @@ const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
 const Coupon = require('../../../models/Coupon');
 const WithdrawalRequest = require('../../models/WithdrawalRequest');
+const applyCouponCredit = require('../../../helpers/applyCouponCredit');
+const { syncCouponCreditAfterEcartDebit } = require('../../../helpers/ecartCouponCredit');
 
 exports.getWallet = async (req, res) => {
   const userId = req.user._id;
@@ -131,6 +133,7 @@ exports.withdrawFunds = async (req, res) => {
 
     // Deduct wallet amount
     user.wallets.eCartWallet -= amount;
+    syncCouponCreditAfterEcartDebit(user, amount);
     await user.save({ session });
 
     // Save transaction log
@@ -215,33 +218,15 @@ exports.redeemCoupon = async (req, res) => {
       });
     }
 
-    const wallet = (coupon.creditWallet === 'eCartWallet' || coupon.creditWallet === 'shortVideoWallet')
-      ? coupon.creditWallet
-      : 'eCartWallet';
-
-    user.wallets[wallet] = (user.wallets[wallet] || 0) + coupon.value;
-
-    user.wallets.rewardWallet = user.wallets.rewardWallet.filter(id => id.toString() !== coupon._id.toString());
+    const credit = applyCouponCredit(user, coupon, { defaultWallet: 'eCartWallet' });
     await user.save();
-
-    await WalletTransaction.create({
-      userId,
-      type: 'earn',
-      source: 'coupon',
-      fromWallet: 'reward',
-      toWallet: wallet,
-      amount: coupon.value,
-      status: 'success',
-      triggeredBy: 'user',
-      notes: `Redeemed coupon: ${coupon.code}`
-    });
-
+    await WalletTransaction.insertMany(credit.transactions);
     await Coupon.findByIdAndDelete(coupon._id);
 
     res.status(200).json({
       success: true,
       message: 'Coupon redeemed successfully',
-      data: { amount: coupon.value }
+      data: { amount: credit.amount }
     });
   } catch (err) {
     console.error('Redeem error:', err);

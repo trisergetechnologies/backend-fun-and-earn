@@ -23,6 +23,8 @@ function stripSellerForbiddenFields(body) {
   delete cleaned.couponEligible;
   delete cleaned.couponWallet;
   delete cleaned.couponAmount;
+  delete cleaned.couponAmountEcart;
+  delete cleaned.couponAmountShortVideo;
   delete cleaned.sellerId;
   delete cleaned.createdByRole;
   delete cleaned.images;

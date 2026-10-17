@@ -38,7 +38,13 @@ const CouponSchema = new mongoose.Schema({
   /** Set on product coupons. Old coupons omit this and keep their original redeem wallet. */
   creditWallet: {
     type: String,
-    enum: ['eCartWallet', 'shortVideoWallet']
+    enum: ['eCartWallet', 'shortVideoWallet', 'both']
+  },
+
+  /** When creditWallet is both: amounts credited to each wallet on redeem. */
+  creditSplit: {
+    eCartWallet: { type: Number },
+    shortVideoWallet: { type: Number }
   },
 
   /** orderId:productId:unitIndex — unique so payment retries do not mint a second coupon. */

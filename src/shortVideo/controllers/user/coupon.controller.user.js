@@ -1,6 +1,7 @@
 const Coupon = require("../../../models/Coupon");
 const User = require("../../../models/User");
 const WalletTransaction = require("../../../models/WalletTransaction");
+const applyCouponCredit = require("../../../helpers/applyCouponCredit");
 
 exports.redeemCoupon = async (req, res) => {
   try {
@@ -25,33 +26,22 @@ exports.redeemCoupon = async (req, res) => {
       });
     }
 
-    const wallet = (coupon.creditWallet === 'eCartWallet' || coupon.creditWallet === 'shortVideoWallet')
-      ? coupon.creditWallet
-      : 'shortVideoWallet';
-
-    user.wallets[wallet] = (user.wallets[wallet] || 0) + coupon.value;
-
-    user.wallets.rewardWallet = user.wallets.rewardWallet.filter(id => id.toString() !== coupon._id.toString());
+    const credit = applyCouponCredit(user, coupon, { defaultWallet: 'shortVideoWallet' });
     await user.save();
-
-    await WalletTransaction.create({
-      userId,
-      type: 'earn',
-      source: 'coupon',
-      fromWallet: 'reward',
-      toWallet: wallet,
-      amount: coupon.value,
-      status: 'success',
-      triggeredBy: 'user',
-      notes: `Redeemed coupon: ${coupon.code}`
-    });
-
+    await WalletTransaction.insertMany(credit.transactions);
     await Coupon.findByIdAndDelete(coupon._id);
+
+    let message = 'Added to your wallet';
+    if (credit.split) {
+      message = 'Coupon redeemed successfully';
+    } else if (credit.wallet === 'eCartWallet') {
+      message = 'Added to your Dream Mart wallet';
+    }
 
     res.status(200).json({
       success: true,
-      message: wallet === 'eCartWallet' ? 'Added to your Dream Mart wallet' : 'Added to your wallet',
-      data: { amount: coupon.value }
+      message,
+      data: { amount: credit.amount }
     });
   } catch (err) {
     console.error('Redeem error:', err);

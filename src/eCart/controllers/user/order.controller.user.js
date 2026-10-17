@@ -9,6 +9,10 @@ const WalletTransaction = require('../../../models/WalletTransaction');
 const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
 const { couponItemSnapshot } = require('../../helpers/couponConfig');
 const issueProductCoupons = require('../../helpers/issueProductCoupons');
+const {
+  syncCouponCreditAfterEcartDebit,
+  ecartDebitWithCouponCreditPipeline,
+} = require('../../../helpers/ecartCouponCredit');
 
 const PaymentIntent = require('../../models/PaymentIntent');
 const { generateInvoicePdf } = require('../../helpers/generateInvoicePdf');
@@ -112,6 +116,7 @@ exports.placeOrder = async (req, res) => {
       finalAmountPaid = grossPayable - usedWalletAmount;
 
       userDoc.wallets.eCartWallet -= usedWalletAmount;
+      syncCouponCreditAfterEcartDebit(userDoc, usedWalletAmount);
       await userDoc.save({ session });
 
       // Log wallet transaction
@@ -330,10 +335,10 @@ exports.createOrderIntent = async (req, res) => {
     if (useWallet && userDoc.wallets?.eCartWallet > 0) {
       usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, grossPayable);
 
-      // Attempt atomic wallet decrement
+      // Attempt atomic wallet decrement (also shrinks coupon credit)
       const updatedUser = await User.findOneAndUpdate(
         { _id: user._id, 'wallets.eCartWallet': { $gte: usedWalletAmount } },
-        { $inc: { 'wallets.eCartWallet': -usedWalletAmount } },
+        ecartDebitWithCouponCreditPipeline(usedWalletAmount),
         { new: true, session }
       );
 
@@ -739,15 +744,18 @@ exports.placeOrderWalletOnly = async (req, res) => {
       await product.save({ session });
     }
 
-    // 4. Wallet check
+    // 4. Wallet check — same payable as gateway path (subtotal + GST + delivery)
+    const gstAmount = Number(cart.totalGstAmount) || 0;
+    const delivery = Number(cart.deliveryCharge) || 0;
+    const payableTotal = Math.round((subtotal + gstAmount + delivery) * 100) / 100;
+
     const walletBalance = userDoc.wallets.eCartWallet;
-    if (walletBalance < subtotal) {
-      throw new Error(`Insufficient wallet balance. Required INR${subtotal}, available INR${walletBalance}`);
+    if (walletBalance < payableTotal) {
+      throw new Error(`Insufficient wallet balance. Required INR${payableTotal}, available INR${walletBalance}`);
     }
 
-    const totalAmount = subtotal + cart.totalGstAmount + cart.deliveryCharge;
-
-    userDoc.wallets.eCartWallet -= totalAmount;
+    userDoc.wallets.eCartWallet -= payableTotal;
+    syncCouponCreditAfterEcartDebit(userDoc, payableTotal);
     await userDoc.save({ session });
 
     // Log wallet transaction
@@ -757,22 +765,22 @@ exports.placeOrderWalletOnly = async (req, res) => {
       source: 'purchase',
       fromWallet: 'eCartWallet',
       toWallet: null,
-      amount: subtotal,
+      amount: payableTotal,
       status: 'success',
       triggeredBy: 'user',
       notes: 'Wallet-only order'
     }], { session });
 
-    // 5. Create order
+    // 5. Create order (totalAmount = item subtotal; GST/delivery stored separately — same as gateway orders)
     const order = new Order({
       buyerId: user._id,
       items: orderItems,
       deliveryAddress,
-      usedWalletAmount: subtotal,
+      usedWalletAmount: payableTotal,
       totalAmount: subtotal,
       finalAmountPaid: 0,
-      deliveryCharge: cart.deliveryCharge,
-      totalGstAmount: cart.totalGstAmount,
+      deliveryCharge: delivery,
+      totalGstAmount: gstAmount,
       paymentStatus: 'paid',
       status: 'placed',
       paymentInfo: {
@@ -797,10 +805,11 @@ exports.placeOrderWalletOnly = async (req, res) => {
       data: {
         orderId: order._id,
         publicOrderId: order.publicOrderId,
-        totalAmount: subtotal,
+        totalAmount: payableTotal,
         paidAmount: 0,
-        totalGstAmount: cart.totalGstAmount,
-        walletUsed: subtotal
+        totalGstAmount: gstAmount,
+        deliveryCharge: delivery,
+        walletUsed: payableTotal
       }
     });
 
@@ -1366,10 +1375,10 @@ exports.createOrderIntentOrangePG = async (req, res) => {
     if (useWallet && userDoc.wallets?.eCartWallet > 0) {
       usedWalletAmount = Math.min(userDoc.wallets.eCartWallet, grossPayable);
 
-      // Atomic wallet decrement
+      // Atomic wallet decrement (also shrinks coupon credit)
       const updatedUser = await User.findOneAndUpdate(
         { _id: user._id, 'wallets.eCartWallet': { $gte: usedWalletAmount } },
-        { $inc: { 'wallets.eCartWallet': -usedWalletAmount } },
+        ecartDebitWithCouponCreditPipeline(usedWalletAmount),
         { new: true, session }
       );
 

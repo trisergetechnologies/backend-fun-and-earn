@@ -2,6 +2,7 @@ const WalletTransaction = require("../../../models/WalletTransaction");
 const WithdrawalRequest = require("../../models/WithdrawalRequest");
 const User = require("../../../models/User");
 const mongoose = require("mongoose");
+const { syncCouponCreditAfterEcartDebit } = require("../../../helpers/ecartCouponCredit");
 
 
 
@@ -52,9 +53,9 @@ exports.handleWithdrawalRequest = async (req, res) => {
 
     // Approve flow
     if (action === "approve") {
-      const walletBalance = user.wallets.eCartWallet;
+      const walletBalance = round2(user.wallets.eCartWallet);
 
-      if (walletBalance < withdrawalReq.amount) {
+      if (walletBalance < round2(withdrawalReq.amount)) {
         return res.status(200).json({
           success: false,
           message: "User does not have sufficient balance to approve withdrawal",
@@ -64,6 +65,7 @@ exports.handleWithdrawalRequest = async (req, res) => {
 
       // Deduct amount from user's eCartWallet
       user.wallets.eCartWallet = round2(walletBalance - withdrawalReq.amount);
+      syncCouponCreditAfterEcartDebit(user, withdrawalReq.amount);
       await user.save();
 
       // Update WalletTransaction
@@ -325,6 +327,7 @@ exports.deductECartWallet = async (req, res) => {
     }
 
     user.wallets.eCartWallet = round2(Math.max(0, currentBalance - amt));
+    syncCouponCreditAfterEcartDebit(user, amt);
     await user.save();
 
     await WalletTransaction.create({

@@ -89,6 +89,8 @@ const UserSchema = new mongoose.Schema({
   wallets: {
     shortVideoWallet: { type: Number, default: 0 },
     eCartWallet: { type: Number, default: 0 },
+    /** Dream Mart balance from coupon redeems; Pool 1 entry must spend this first. */
+    eCartCouponCredit: { type: Number, default: 0 },
     rewardWallet: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' }]
   },
   isActive: { type: Boolean, default: true },

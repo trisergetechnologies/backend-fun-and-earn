@@ -6,7 +6,11 @@ const {
   buildImagesForUpdate,
   validateImageCount,
 } = require("../../../utils/productImages");
-const { parseCouponConfig } = require("../../helpers/couponConfig");
+const {
+  parseCouponConfig,
+  couponSetFromFields,
+  couponUnsetForFields,
+} = require("../../helpers/couponConfig");
 
 exports.addProduct = async (req, res) => {
   try {
@@ -99,13 +103,7 @@ exports.addProduct = async (req, res) => {
       variations,
       createdByRole: user.role,
       images,
-      couponEligible: couponConfig.fields.couponEligible,
-      ...(couponConfig.fields.couponEligible
-        ? {
-            couponWallet: couponConfig.fields.couponWallet,
-            couponAmount: couponConfig.fields.couponAmount,
-          }
-        : {}),
+      ...couponSetFromFields(couponConfig.fields),
     });
 
     await newProduct.save();
@@ -258,14 +256,14 @@ exports.updateProduct = async (req, res) => {
     }
     let unsetCoupon = null;
     if (couponConfig.fields) {
-      req.body.couponEligible = couponConfig.fields.couponEligible;
-      if (couponConfig.fields.couponEligible) {
-        req.body.couponWallet = couponConfig.fields.couponWallet;
-        req.body.couponAmount = couponConfig.fields.couponAmount;
-      } else {
-        delete req.body.couponWallet;
-        delete req.body.couponAmount;
-        unsetCoupon = { couponWallet: 1, couponAmount: 1 };
+      const setCoupon = couponSetFromFields(couponConfig.fields);
+      Object.assign(req.body, setCoupon);
+      unsetCoupon = couponUnsetForFields(couponConfig.fields);
+      // Avoid writing nulls for fields we intend to $unset
+      if (unsetCoupon) {
+        Object.keys(unsetCoupon).forEach((key) => {
+          delete req.body[key];
+        });
       }
     }
 

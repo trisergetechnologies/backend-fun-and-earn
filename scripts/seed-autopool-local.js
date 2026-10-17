@@ -198,6 +198,7 @@ async function createReferralJoiner({ profile, pkg, passwordHash, serialNumber }
       wallets: {
         shortVideoWallet: 0,
         eCartWallet: 25000,
+        eCartCouponCredit: 25000,
         rewardWallet: [],
       },
       eCartProfile: {

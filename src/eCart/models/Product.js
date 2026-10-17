@@ -81,10 +81,18 @@ const ProductSchema = new mongoose.Schema({
 
   couponWallet: {
     type: String,
-    enum: ['eCartWallet', 'shortVideoWallet']
+    enum: ['eCartWallet', 'shortVideoWallet', 'both']
   },
 
   couponAmount: {
+    type: Number
+  },
+
+  couponAmountEcart: {
+    type: Number
+  },
+
+  couponAmountShortVideo: {
     type: Number
   },
 

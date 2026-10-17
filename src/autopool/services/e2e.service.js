@@ -106,6 +106,7 @@ async function provisionUser({
       wallets: {
         shortVideoWallet: 0,
         eCartWallet: initialWallet,
+        eCartCouponCredit: initialWallet,
         rewardWallet: [],
       },
       isActive: true,
@@ -119,7 +120,9 @@ async function provisionUser({
     else user.package = null;
     user.wallets = user.wallets || {};
     if (hasBalance) {
-      user.wallets.eCartWallet = Number(eCartBalance) || 0;
+      const bal = Number(eCartBalance) || 0;
+      user.wallets.eCartWallet = bal;
+      user.wallets.eCartCouponCredit = bal;
     }
     if (!user.serialNumber) user.serialNumber = await nextSerial();
     if (!user.referralCode) user.referralCode = `E2E${user.serialNumber}`;

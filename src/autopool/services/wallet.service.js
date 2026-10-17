@@ -2,8 +2,12 @@ const User = require('../../models/User');
 const WalletTransaction = require('../../models/WalletTransaction');
 const { AutopoolLedger } = require('../models');
 
+const COUPON_CREDIT_REQUIRED_MSG =
+  'Buy products on Dream Mart to earn coupon credit, then redeem it to join the Loyalty Pool.';
+
 /**
  * Debit eCartWallet for Autopool (additive WalletTransaction source=autopool).
+ * Pool 1 entry must come from eCartCouponCredit (coupon-redeemed Dream Mart balance).
  */
 async function debitEcartForAutopool({
   userId,
@@ -19,13 +23,56 @@ async function debitEcartForAutopool({
     return { alreadyProcessed: true, ledger: existing };
   }
 
+  const user = await User.findById(userId)
+    .select('wallets.eCartWallet wallets.eCartCouponCredit')
+    .session(session);
+  if (!user) {
+    const err = new Error('User not found');
+    err.code = 'USER_NOT_FOUND';
+    throw err;
+  }
+
+  const walletBal = Number(user.wallets?.eCartWallet) || 0;
+  const couponCredit = Number(user.wallets?.eCartCouponCredit) || 0;
+
+  if (couponCredit < amount) {
+    const err = new Error(COUPON_CREDIT_REQUIRED_MSG);
+    err.code = 'INSUFFICIENT_COUPON_CREDIT';
+    throw err;
+  }
+
+  if (walletBal < amount) {
+    const err = new Error('Insufficient DreamMart Points');
+    err.code = 'INSUFFICIENT_WALLET';
+    throw err;
+  }
+
   const updated = await User.findOneAndUpdate(
-    { _id: userId, 'wallets.eCartWallet': { $gte: amount } },
-    { $inc: { 'wallets.eCartWallet': -amount } },
+    {
+      _id: userId,
+      'wallets.eCartWallet': { $gte: amount },
+      'wallets.eCartCouponCredit': { $gte: amount },
+    },
+    {
+      $inc: {
+        'wallets.eCartWallet': -amount,
+        'wallets.eCartCouponCredit': -amount,
+      },
+    },
     { new: true, session }
   );
 
   if (!updated) {
+    // Race: re-check which gate failed
+    const fresh = await User.findById(userId)
+      .select('wallets.eCartWallet wallets.eCartCouponCredit')
+      .session(session);
+    const credit = Number(fresh?.wallets?.eCartCouponCredit) || 0;
+    if (credit < amount) {
+      const err = new Error(COUPON_CREDIT_REQUIRED_MSG);
+      err.code = 'INSUFFICIENT_COUPON_CREDIT';
+      throw err;
+    }
     const err = new Error('Insufficient DreamMart Points');
     err.code = 'INSUFFICIENT_WALLET';
     throw err;
@@ -73,6 +120,7 @@ async function debitEcartForAutopool({
 
 /**
  * Credit eCartWallet for Autopool cycle reward.
+ * Does not increase eCartCouponCredit (rewards are not coupon credit).
  */
 async function creditEcartForAutopool({
   userId,
@@ -136,4 +184,5 @@ async function creditEcartForAutopool({
 module.exports = {
   debitEcartForAutopool,
   creditEcartForAutopool,
+  COUPON_CREDIT_REQUIRED_MSG,
 };

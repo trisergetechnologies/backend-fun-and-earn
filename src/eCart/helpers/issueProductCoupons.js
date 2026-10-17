@@ -14,6 +14,45 @@ async function uniqueCouponCode() {
   throw new Error('Could not allocate a coupon code');
 }
 
+function resolveCouponCredit(item) {
+  const wallet = item.couponWallet;
+  const qty = Math.floor(Number(item.quantity) || 0);
+  if (qty <= 0) return null;
+
+  if (wallet === 'both') {
+    const ecart = Number(item.couponAmountEcart);
+    const shortVideo = Number(item.couponAmountShortVideo);
+    if (
+      !Number.isFinite(ecart) || ecart <= 0
+      || !Number.isFinite(shortVideo) || shortVideo <= 0
+    ) {
+      return null;
+    }
+    const amountEcart = Math.round(ecart * 100) / 100;
+    const amountShort = Math.round(shortVideo * 100) / 100;
+    const total = Math.round((amountEcart + amountShort) * 100) / 100;
+    return {
+      creditWallet: 'both',
+      creditSplit: {
+        eCartWallet: amountEcart,
+        shortVideoWallet: amountShort,
+      },
+      value: total,
+      qty,
+    };
+  }
+
+  const amount = Number(item.couponAmount);
+  if (!WALLETS.includes(wallet) || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  return {
+    creditWallet: wallet,
+    value: Math.round(amount * 100) / 100,
+    qty,
+  };
+}
+
 /**
  * Creates one coupon per unit for eligible order items.
  * Safe to call more than once: issueKey is unique.
@@ -30,33 +69,33 @@ async function issueProductCoupons(orderId) {
 
     for (const item of order.items || []) {
       if (!item.couponEligible) continue;
-      const wallet = item.couponWallet;
-      const amount = Number(item.couponAmount);
-      const qty = Math.floor(Number(item.quantity) || 0);
-      if (!WALLETS.includes(wallet) || !Number.isFinite(amount) || amount <= 0 || qty <= 0) {
-        continue;
-      }
+      const credit = resolveCouponCredit(item);
+      if (!credit) continue;
 
-      for (let unitIndex = 0; unitIndex < qty; unitIndex += 1) {
+      for (let unitIndex = 0; unitIndex < credit.qty; unitIndex += 1) {
         const issueKey = `${order._id}:${item.productId}:${unitIndex}`;
         let coupon = await Coupon.findOne({ issueKey }).select('_id');
         if (!coupon) {
           try {
             const code = await uniqueCouponCode();
-            coupon = await Coupon.create({
+            const doc = {
               code,
-              title: `₹${amount} Reward Coupon`,
+              title: `₹${credit.value} Reward Coupon`,
               description: 'Valid once.',
               earnedBy: order.buyerId,
               earnedFromOrder: order._id,
               productId: item.productId,
               unitIndex,
-              creditWallet: wallet,
+              creditWallet: credit.creditWallet,
               issueKey,
-              value: amount,
+              value: credit.value,
               isActive: true,
               isRedeemed: false,
-            });
+            };
+            if (credit.creditSplit) {
+              doc.creditSplit = credit.creditSplit;
+            }
+            coupon = await Coupon.create(doc);
           } catch (err) {
             if (err && err.code === 11000) {
               coupon = await Coupon.findOne({ issueKey }).select('_id');
