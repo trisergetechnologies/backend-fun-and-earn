@@ -10,6 +10,10 @@ const {
   getReferrals,
   getParticipationDetail,
 } = require('../services/overview.service');
+const {
+  listAchieverPools,
+  getPoolAchievers,
+} = require('../services/achievers.service');
 
 const AUTO_JOIN_MESSAGE =
   'Pool upgrades are automatic now. You will be upgraded when your turn comes in the waiting room and you have a referral pass.';
@@ -112,6 +116,24 @@ exports.joinPool1 = async (req, res) => {
       success: true,
       data: result,
     });
+  } catch (err) {
+    return mapError(err, res);
+  }
+};
+
+exports.getAchieverPools = async (req, res) => {
+  try {
+    const pools = await listAchieverPools();
+    return res.json({ success: true, data: { pools } });
+  } catch (err) {
+    return mapError(err, res);
+  }
+};
+
+exports.getPoolAchievers = async (req, res) => {
+  try {
+    const data = await getPoolAchievers(req.params.level);
+    return res.json({ success: true, data });
   } catch (err) {
     return mapError(err, res);
   }

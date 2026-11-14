@@ -4,6 +4,8 @@ const userCtrl = require('../../controllers/user.controller');
 const router = express.Router();
 
 router.get('/overview', userCtrl.getOverview);
+router.get('/achievers/pools', userCtrl.getAchieverPools);
+router.get('/achievers/pools/:level', userCtrl.getPoolAchievers);
 router.get('/pools/:level', userCtrl.getPool);
 router.get('/participations/:id', userCtrl.getParticipation);
 router.get('/credits', userCtrl.getCredits);
