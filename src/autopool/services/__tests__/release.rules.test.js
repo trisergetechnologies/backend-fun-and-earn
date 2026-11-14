@@ -4,12 +4,24 @@ const {
   shouldReleaseAfterCycle15,
 } = require('../release.rules');
 
-describe('release.rules', () => {
-  test('pools 1-12 not released at 5/5 without upgradeUsedAt', () => {
+describe('release.rules (WR-era: release at maxCycles without upgrade)', () => {
+  test('pools 1-12 released at maxCycles without upgradeUsedAt', () => {
     expect(
       isPoolReleased({
         poolLevel: 1,
         cycleCount: 5,
+        upgradeUsedAt: null,
+        releasedAt: null,
+        configSnapshot: { maxCycles: 5 },
+      })
+    ).toBe(true);
+  });
+
+  test('pools 1-12 not released before maxCycles', () => {
+    expect(
+      isPoolReleased({
+        poolLevel: 1,
+        cycleCount: 4,
         upgradeUsedAt: null,
         releasedAt: null,
         configSnapshot: { maxCycles: 5 },
@@ -52,7 +64,7 @@ describe('release.rules', () => {
     ).toBe(true);
   });
 
-  test('shouldReleaseAfterUpgrade only when cycles done', () => {
+  test('shouldReleaseAfterUpgrade when cycles done', () => {
     expect(
       shouldReleaseAfterUpgrade({
         poolLevel: 2,
@@ -72,17 +84,11 @@ describe('release.rules', () => {
     ).toBeInstanceOf(Date);
   });
 
-  test('shouldReleaseAfterCycle15 for pool1 requires upgradeUsedAt', () => {
+  test('shouldReleaseAfterCycle15 always releases', () => {
     expect(
       shouldReleaseAfterCycle15({
         poolLevel: 1,
         upgradeUsedAt: null,
-      })
-    ).toBeNull();
-    expect(
-      shouldReleaseAfterCycle15({
-        poolLevel: 1,
-        upgradeUsedAt: new Date(),
       })
     ).toBeInstanceOf(Date);
     expect(

@@ -6,6 +6,7 @@ module.exports = {
   AutopoolPlacement: require('./AutopoolPlacement'),
   AutopoolReferralEvent: require('./AutopoolReferralEvent'),
   AutopoolNextPoolEligibility: require('./AutopoolNextPoolEligibility'),
+  AutopoolWaitingRoom: require('./AutopoolWaitingRoom'),
   AutopoolUserCredit: require('./AutopoolUserCredit'),
   AutopoolUpgradeCreditLedger: require('./AutopoolUpgradeCreditLedger'),
   AutopoolLedger: require('./AutopoolLedger'),

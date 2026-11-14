@@ -6,11 +6,13 @@ const {
   AutopoolUpgradeCreditLedger,
   AutopoolPoolConfig,
   AutopoolPlacement,
+  AutopoolWaitingRoom,
 } = require('../models');
 const { ensureSettings, seedPoolConfigs, isAutopoolEnabled } = require('./config.service');
 const { getBalance } = require('./referralCredit.service');
 const { isPoolReleased } = require('./release.rules');
-const { findOccupyingParticipation } = require('./entry.service');
+const { findOccupyingParticipation, MANUAL_PASS_COST } = require('./entry.service');
+const { getQueuePosition } = require('./waitingRoom.service');
 
 function calculateWaitingJoinsNeeded(participation, openPlacements) {
   if (!participation) return { joinsNeeded: null, isLastCycle: false };
@@ -43,28 +45,47 @@ function calculateWaitingJoinsNeeded(participation, openPlacements) {
   return { joinsNeeded, isLastCycle };
 }
 
+async function buildWaitingRoomInfo(userId, targetPoolLevel, wrSeats, creditBalance) {
+  const seats = (wrSeats || []).filter((s) => s.targetPoolLevel === targetPoolLevel);
+  if (seats.length === 0) return null;
+
+  const first = seats[0];
+  const position = await getQueuePosition(first);
+  const waitingForPass = creditBalance < 1;
+  return {
+    count: seats.length,
+    position,
+    status: waitingForPass ? 'WAITING_FOR_PASS' : 'WAITING',
+    entryAmount: first.entryAmount,
+    enqueuedAt: first.enqueuedAt,
+  };
+}
+
 async function getOverview(userId) {
-  const [creditBalance, configs, occupying, eligibilities, allUserCycles, settings] = await Promise.all([
-    getBalance(userId),
-    AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
-    AutopoolParticipation.find({ userId, releasedAt: null }).lean(),
-    AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
-    AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
-    ensureSettings(),
-  ]);
+  const [creditBalance, configs, occupying, eligibilities, allUserCycles, settings, wrSeats] =
+    await Promise.all([
+      getBalance(userId),
+      AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
+      AutopoolParticipation.find({ userId, releasedAt: null }).lean(),
+      AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
+      AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
+      ensureSettings(),
+      AutopoolWaitingRoom.find({ userId, status: 'WAITING' }).sort({ enqueuedAt: 1 }).lean(),
+    ]);
   const enabled = Boolean(settings?.enabled);
 
   const occupyingPoolLevels = occupying.map((p) => p.poolLevel);
-  const openPlacements = occupyingPoolLevels.length > 0
-    ? await AutopoolPlacement.find({
-        poolLevel: { $in: occupyingPoolLevels },
-        status: { $in: ['PLACED', 'WAITING'] },
-        openSlots: { $gt: 0 },
-      })
-        .select('poolLevel participationId openSlots queueSequence')
-        .sort({ queueSequence: 1 })
-        .lean()
-    : [];
+  const openPlacements =
+    occupyingPoolLevels.length > 0
+      ? await AutopoolPlacement.find({
+          poolLevel: { $in: occupyingPoolLevels },
+          status: { $in: ['PLACED', 'WAITING'] },
+          openSlots: { $gt: 0 },
+        })
+          .select('poolLevel participationId openSlots queueSequence')
+          .sort({ queueSequence: 1 })
+          .lean()
+      : [];
 
   let totalEarnings = 0;
   const poolEarningsMap = {};
@@ -82,12 +103,14 @@ async function getOverview(userId) {
 
     const nextCfg = configs.find((x) => x.poolLevel === cfg.poolLevel + 1);
     const nextPoolTarget = nextCfg ? nextCfg.entryAmount : 0;
-    const nextPoolReserve = part ? (part.nextPoolEligibleAmount || 0) : 0;
+    const nextPoolReserve = part ? part.nextPoolEligibleAmount || 0 : 0;
     const poolEarnings = poolEarningsMap[cfg.poolLevel] || 0;
     const { joinsNeeded, isLastCycle } = calculateWaitingJoinsNeeded(part, openPlacements);
 
     let joinPool1 = null;
     let joinNext = null;
+    let joinManual = null;
+    let waitingRoom = null;
 
     if (cfg.poolLevel === 1) {
       const reasons = [];
@@ -99,17 +122,44 @@ async function getOverview(userId) {
         entryAmount: cfg.entryAmount,
       };
     } else {
-      const reasons = [];
-      if (!enabled) reasons.push('AUTOPOOL_DISABLED');
+      // Soft-closed for old clients — upgrades are automatic via WR cron
+      const reasons = ['AUTO_JOIN_ENABLED'];
+      if (!enabled) reasons.unshift('AUTOPOOL_DISABLED');
       if (part) reasons.push('TARGET_OCCUPYING');
-      if (!elig) reasons.push('NO_ELIGIBILITY');
+      if (!elig && !(wrSeats || []).some((s) => s.targetPoolLevel === cfg.poolLevel)) {
+        reasons.push('NO_ELIGIBILITY');
+      }
       if (creditBalance < 1) reasons.push('NO_UPGRADE_CREDIT');
       joinNext = {
-        allowed: reasons.length === 0,
+        allowed: false,
         reasons,
         eligibility: elig || null,
         entryAmount: elig?.entryAmount || cfg.entryAmount,
       };
+
+      waitingRoom = await buildWaitingRoomInfo(
+        userId,
+        cfg.poolLevel,
+        wrSeats,
+        creditBalance
+      );
+
+      if (cfg.poolLevel === 2 || cfg.poolLevel === 3) {
+        const passesRequired = MANUAL_PASS_COST[cfg.poolLevel];
+        const manualReasons = [];
+        if (!enabled) manualReasons.push('AUTOPOOL_DISABLED');
+        if (part) manualReasons.push('POOL_OCCUPYING');
+        if (waitingRoom) manualReasons.push('WAITING_ROOM_PENDING');
+        const otherOk = occupying.some((p) => p.poolLevel !== cfg.poolLevel);
+        if (!otherOk) manualReasons.push('NO_OTHER_OCCUPYING');
+        if (creditBalance < passesRequired) manualReasons.push('NO_UPGRADE_CREDIT');
+        joinManual = {
+          allowed: manualReasons.length === 0 && enabled,
+          reasons: manualReasons,
+          entryAmount: cfg.entryAmount,
+          passesRequired,
+        };
+      }
     }
 
     pools.push({
@@ -138,6 +188,8 @@ async function getOverview(userId) {
       sourceEligibility: sourceElig || null,
       joinPool1,
       joinNext,
+      joinManual,
+      waitingRoom,
     });
   }
 
@@ -145,6 +197,13 @@ async function getOverview(userId) {
     enabled,
     creditBalance,
     totalEarnings,
+    waitingRoomSeats: wrSeats.map((s) => ({
+      id: s._id,
+      targetPoolLevel: s.targetPoolLevel,
+      entryAmount: s.entryAmount,
+      enqueuedAt: s.enqueuedAt,
+      sourceParticipationId: s.sourceParticipationId,
+    })),
     pools,
   };
 }
@@ -190,6 +249,40 @@ async function getPoolDetail(userId, poolLevel) {
     }
   }
 
+  const wrSeats = await AutopoolWaitingRoom.find({
+    userId,
+    targetPoolLevel: level,
+    status: 'WAITING',
+  })
+    .sort({ enqueuedAt: 1 })
+    .lean();
+  const creditBalance = await getBalance(userId);
+  const waitingRoom = await buildWaitingRoomInfo(userId, level, wrSeats, creditBalance);
+
+  let joinManual = null;
+  if (level === 2 || level === 3) {
+    const passesRequired = MANUAL_PASS_COST[level];
+    const occupying = await AutopoolParticipation.find({
+      userId,
+      releasedAt: null,
+    }).lean();
+    const manualReasons = [];
+    const enabled = await isAutopoolEnabled();
+    if (!enabled) manualReasons.push('AUTOPOOL_DISABLED');
+    if (part) manualReasons.push('POOL_OCCUPYING');
+    if (waitingRoom) manualReasons.push('WAITING_ROOM_PENDING');
+    if (!occupying.some((p) => p.poolLevel !== level)) {
+      manualReasons.push('NO_OTHER_OCCUPYING');
+    }
+    if (creditBalance < passesRequired) manualReasons.push('NO_UPGRADE_CREDIT');
+    joinManual = {
+      allowed: manualReasons.length === 0 && enabled,
+      reasons: manualReasons,
+      entryAmount: currentCfg?.entryAmount || 0,
+      passesRequired,
+    };
+  }
+
   return {
     participation: part ? { ...part, joinsNeeded, isLastCycle } : null,
     history,
@@ -200,6 +293,8 @@ async function getPoolDetail(userId, poolLevel) {
     joinsNeeded,
     isLastCycle,
     entryAmount: currentCfg?.entryAmount || 1000,
+    waitingRoom,
+    joinManual,
   };
 }
 

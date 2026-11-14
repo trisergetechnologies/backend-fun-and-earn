@@ -53,6 +53,13 @@ try {
   console.error('videoRetentionCron failed', e);
 }
 
+try {
+  require('./jobs/autopoolWaitingRoomCron');
+  console.log('autopoolWaitingRoomCron loaded');
+} catch (e) {
+  console.error('autopoolWaitingRoomCron failed', e);
+}
+
 /**
  * Creates a new Express application with base configuration
  * 

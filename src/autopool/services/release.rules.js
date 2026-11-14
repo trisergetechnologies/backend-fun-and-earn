@@ -1,5 +1,8 @@
 /**
- * Pool release / occupying rules (locked business spec).
+ * Pool release / occupying rules.
+ * Pools 1–12: release at maxCycles (upgrade no longer blocks re-entry).
+ * Unconsumed next-pool eligibility is held in Waiting Room.
+ * Pool 13: release at maxCycles only (no next pool).
  */
 
 function isPoolReleased(participation) {
@@ -9,12 +12,8 @@ function isPoolReleased(participation) {
   const maxCycles = participation.configSnapshot?.maxCycles ?? 5;
   const cyclesDone = (participation.cycleCount || 0) >= maxCycles;
 
-  if (participation.poolLevel === 13) {
-    return cyclesDone;
-  }
-
-  // Pools 1–12: 5/5 AND upgrade used
-  return cyclesDone && Boolean(participation.upgradeUsedAt);
+  // All pools (1–13): cycles complete → released
+  return cyclesDone;
 }
 
 function computeReleasedAt(participation, now = new Date()) {
@@ -27,19 +26,13 @@ function computeReleasedAt(participation, now = new Date()) {
 function shouldReleaseAfterUpgrade(participation, now = new Date()) {
   const maxCycles = participation.configSnapshot?.maxCycles ?? 5;
   const cyclesDone = (participation.cycleCount || 0) >= maxCycles;
-  if (participation.poolLevel === 13) {
-    return cyclesDone ? now : null;
-  }
-  if (cyclesDone && participation.upgradeUsedAt) {
-    return now;
-  }
+  if (cyclesDone) return now;
   return null;
 }
 
+/** After final cycle: always release (WR holds unconsumed upgrades). */
 function shouldReleaseAfterCycle15(participation, now = new Date()) {
-  if (participation.poolLevel === 13) return now;
-  if (participation.upgradeUsedAt) return now;
-  return null;
+  return now;
 }
 
 module.exports = {

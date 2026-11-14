@@ -4,6 +4,7 @@ const {
   AutopoolParticipation,
   AutopoolNextPoolEligibility,
   AutopoolLedger,
+  AutopoolWaitingRoom,
 } = require('../models');
 const {
   isAutopoolEnabled,
@@ -15,12 +16,30 @@ const { consumeCredit, getBalance } = require('./referralCredit.service');
 const { placeParticipation } = require('./placement.service');
 const { findOccupyingParticipation } = require('./entry.service');
 const { shouldReleaseAfterUpgrade } = require('./release.rules');
+const { markSeatJoined } = require('./waitingRoom.service');
 
 function makeId(prefix) {
   return `${prefix}:${crypto.randomBytes(12).toString('hex')}`;
 }
 
-async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
+/**
+ * Internal next-pool join used by Waiting Room cron only.
+ * HTTP join-next is soft-closed (AUTO_JOIN_ENABLED).
+ *
+ * @param {object} opts
+ * @param {string|ObjectId} opts.userId
+ * @param {number} opts.targetPoolLevel
+ * @param {string} [opts.idempotencyKey]
+ * @param {string|ObjectId} [opts.waitingRoomSeatId] — if set, CAS-mark JOINED
+ * @param {string|ObjectId} [opts.eligibilityId] — prefer this AVAILABLE eligibility
+ */
+async function executeNextPoolJoin({
+  userId,
+  targetPoolLevel,
+  idempotencyKey,
+  waitingRoomSeatId,
+  eligibilityId,
+}) {
   const level = Number(targetPoolLevel);
   if (!Number.isInteger(level) || level < 2 || level > 13) {
     const err = new Error('Target pool must be 2–13');
@@ -52,24 +71,60 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
       return { alreadyProcessed: true, participation: p };
     }
 
+    // CAS waiting-room seat first so concurrent cron/manual cannot double-claim
+    let wrSeat = null;
+    if (waitingRoomSeatId) {
+      wrSeat = await AutopoolWaitingRoom.findOneAndUpdate(
+        { _id: waitingRoomSeatId, status: 'WAITING' },
+        { $set: { status: 'JOINED', joinedAt: new Date() } },
+        { new: true, session }
+      );
+      if (!wrSeat) {
+        const err = new Error('Waiting room seat already processed');
+        err.code = 'WR_SEAT_GONE';
+        throw err;
+      }
+    }
+
     const occupyingTarget = await findOccupyingParticipation(userId, level, session);
     if (occupyingTarget) {
+      // Roll back WR CAS if we claimed it
+      if (wrSeat) {
+        wrSeat.status = 'WAITING';
+        wrSeat.joinedAt = null;
+        await wrSeat.save({ session });
+      }
       const err = new Error('Target pool is already occupying');
       err.code = 'TARGET_OCCUPYING';
       throw err;
     }
 
     const sourceLevel = level - 1;
-    const eligibility = await AutopoolNextPoolEligibility.findOne({
-      userId,
-      sourcePoolLevel: sourceLevel,
-      targetPoolLevel: level,
-      status: 'AVAILABLE',
-    })
-      .sort({ earnedAt: 1 })
-      .session(session);
+    let eligibility = null;
+    if (eligibilityId) {
+      eligibility = await AutopoolNextPoolEligibility.findOne({
+        _id: eligibilityId,
+        userId,
+        status: 'AVAILABLE',
+      }).session(session);
+    }
+    if (!eligibility) {
+      eligibility = await AutopoolNextPoolEligibility.findOne({
+        userId,
+        sourcePoolLevel: sourceLevel,
+        targetPoolLevel: level,
+        status: 'AVAILABLE',
+      })
+        .sort({ earnedAt: 1 })
+        .session(session);
+    }
 
     if (!eligibility) {
+      if (wrSeat) {
+        wrSeat.status = 'WAITING';
+        wrSeat.joinedAt = null;
+        await wrSeat.save({ session });
+      }
       const err = new Error('No available next-pool eligibility');
       err.code = 'NO_ELIGIBILITY';
       throw err;
@@ -77,6 +132,11 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
 
     const balance = await getBalance(userId, session);
     if (balance < 1) {
+      if (wrSeat) {
+        wrSeat.status = 'WAITING';
+        wrSeat.joinedAt = null;
+        await wrSeat.save({ session });
+      }
       const err = new Error('Insufficient upgrade credits');
       err.code = 'NO_UPGRADE_CREDIT';
       throw err;
@@ -128,8 +188,31 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
     if (source) {
       source.upgradeUsedAt = new Date();
       const releasedAt = shouldReleaseAfterUpgrade(source);
-      if (releasedAt) source.releasedAt = releasedAt;
+      if (releasedAt && !source.releasedAt) source.releasedAt = releasedAt;
       await source.save({ session });
+    }
+
+    if (wrSeat) {
+      wrSeat.joinedParticipationId = participation._id;
+      await wrSeat.save({ session });
+    } else if (waitingRoomSeatId) {
+      await markSeatJoined(waitingRoomSeatId, participation._id, session);
+    } else {
+      // Mark any WAITING seat for this source as JOINED
+      await AutopoolWaitingRoom.findOneAndUpdate(
+        {
+          sourceParticipationId: eligibility.sourceParticipationId,
+          status: 'WAITING',
+        },
+        {
+          $set: {
+            status: 'JOINED',
+            joinedAt: new Date(),
+            joinedParticipationId: participation._id,
+          },
+        },
+        { session }
+      );
     }
 
     await AutopoolLedger.create(
@@ -146,6 +229,7 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
             eligibilityId: eligibility._id,
             sourceParticipationId: eligibility.sourceParticipationId,
             newParticipationId: participation._id,
+            waitingRoomSeatId: waitingRoomSeatId || null,
           },
         },
       ],
@@ -166,4 +250,12 @@ async function joinNextPool({ userId, targetPoolLevel, idempotencyKey }) {
   }
 }
 
-module.exports = { joinNextPool };
+/**
+ * @deprecated HTTP path soft-closed. Kept for tests / internal callers.
+ * Prefer executeNextPoolJoin from cron.
+ */
+async function joinNextPool(opts) {
+  return executeNextPoolJoin(opts);
+}
+
+module.exports = { joinNextPool, executeNextPoolJoin };

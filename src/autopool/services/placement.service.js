@@ -12,6 +12,7 @@ const { creditEcartForAutopool } = require('./wallet.service');
 const { ensureSystemBalances, getPoolConfig } = require('./config.service');
 const { shouldReleaseAfterCycle15 } = require('./release.rules');
 const { maybeResetCreditsAfterPool10 } = require('./referralCredit.service');
+const { enqueueFromEligibility, enqueueForSourceParticipation } = require('./waitingRoom.service');
 
 async function nextQueueSequence(poolLevel, session) {
   const last = await AutopoolPlacement.findOne({ poolLevel })
@@ -290,7 +291,7 @@ async function completeCycleForParent({ parentPlacement, session }) {
     const entryAmount =
       targetConfig?.entryAmount ?? parentParticipation.nextPoolEligibleAmount;
 
-    await AutopoolNextPoolEligibility.findOneAndUpdate(
+    const eligibility = await AutopoolNextPoolEligibility.findOneAndUpdate(
       { sourceParticipationId: parentParticipation._id },
       {
         $setOnInsert: {
@@ -303,8 +304,13 @@ async function completeCycleForParent({ parentPlacement, session }) {
           earnedAt: new Date(),
         },
       },
-      { upsert: true, session }
+      { upsert: true, new: true, session }
     );
+
+    // Early WR enqueue so cron can auto-upgrade as soon as target is free + pass exists
+    if (eligibility?.status === 'AVAILABLE') {
+      await enqueueFromEligibility(eligibility, session);
+    }
   }
 
   parentParticipation.cycleCount = nextCycleNumber;
@@ -316,6 +322,8 @@ async function completeCycleForParent({ parentPlacement, session }) {
     if (releasedAt) {
       parentParticipation.releasedAt = releasedAt;
     }
+    // Ensure unconsumed next-pool seat is in WR when source releases
+    await enqueueForSourceParticipation(parentParticipation._id, session);
   }
 
   let reenterParticipationId = null;

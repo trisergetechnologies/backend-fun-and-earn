@@ -7,6 +7,7 @@ const AutopoolLedgerSchema = new mongoose.Schema(
       type: String,
       enum: [
         'manual_entry_debit',
+        'manual_pool_entry',
         'wallet_reward',
         'same_pool_continuation',
         'next_pool_reserve',
