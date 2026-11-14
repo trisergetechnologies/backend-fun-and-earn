@@ -23,7 +23,7 @@ const {
   LEGAL_NOTICE_TEXT,
 } = require('../constants/legalNotice');
 
-const MANUAL_PASS_COST = { 2: 2, 3: 4 };
+const MANUAL_PASS_COST = { 2: 2, 3: 3 };
 
 function makeId(prefix) {
   return `${prefix}:${crypto.randomBytes(12).toString('hex')}`;
@@ -226,7 +226,7 @@ async function joinPool1Manual({
 
 /**
  * Manual DreamMart entry for Pool 2 or 3.
- * No SN / no referrer credit. Consumes 2 (P2) or 4 (P3) upgrade passes.
+ * No SN / no referrer credit. Consumes 2 (P2) or 3 (P3) upgrade passes.
  * Requires ≥1 other occupying pool ≠ target; blocks if WR seat exists for target.
  */
 async function joinPoolManual({

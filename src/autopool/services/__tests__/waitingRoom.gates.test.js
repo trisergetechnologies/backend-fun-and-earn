@@ -51,7 +51,7 @@ describe('manual P2/P3 gates', () => {
       hasWaitingSeat: true,
       otherOccupyingCount: 1,
       creditBalance: 4,
-      passesRequired: 4,
+      passesRequired: 3,
     });
     expect(r.allowed).toBe(false);
     expect(r.reasons).toContain('WAITING_ROOM_PENDING');
