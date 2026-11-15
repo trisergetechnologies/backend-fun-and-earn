@@ -11,8 +11,8 @@ router.get('/participations/:id', userCtrl.getParticipation);
 router.get('/credits', userCtrl.getCredits);
 router.get('/referrals', userCtrl.getReferrals);
 router.post('/pools/1/join', userCtrl.joinPool1);
-router.post('/pools/2/join', userCtrl.joinPoolManual);
-router.post('/pools/3/join', userCtrl.joinPoolManual);
+// :level must be 2 or 3 — validated in joinPoolManual
+router.post('/pools/:level/join', userCtrl.joinPoolManual);
 router.post('/pools/:level/join-next', userCtrl.joinNext);
 
 module.exports = router;
