@@ -16,8 +16,14 @@ const {
 const { debitEcartForAutopool } = require('./wallet.service');
 const { addCredit, consumeCredit, getBalance } = require('./referralCredit.service');
 const { placeParticipation } = require('./placement.service');
-const { isPoolReleased } = require('./release.rules');
-const { userHasWaitingSeat } = require('./waitingRoom.service');
+const {
+  shouldTreatAsOccupying,
+  computeReleasedAt,
+} = require('./release.rules');
+const {
+  userHasWaitingSeat,
+  enqueueForSourceParticipation,
+} = require('./waitingRoom.service');
 const {
   LEGAL_NOTICE_VERSION,
   LEGAL_NOTICE_TEXT,
@@ -29,31 +35,66 @@ function makeId(prefix) {
   return `${prefix}:${crypto.randomBytes(12).toString('hex')}`;
 }
 
-async function findOccupyingParticipation(userId, poolLevel, session) {
-  return AutopoolParticipation.findOne({
-    userId,
-    poolLevel,
-    releasedAt: null,
-  }).session(session || null);
+/**
+ * Persist releasedAt (+ WR enqueue) when cycles are done but stamp was missing.
+ * Returns null when no longer occupying; otherwise the same doc.
+ */
+async function coerceOccupyingDoc(part, session) {
+  if (!part) return null;
+  if (!shouldTreatAsOccupying(part)) {
+    if (!part.releasedAt) {
+      const releasedAt =
+        computeReleasedAt(part) || part.completedAt || new Date();
+      await AutopoolParticipation.updateOne(
+        { _id: part._id, releasedAt: null },
+        { $set: { releasedAt } },
+        session ? { session } : undefined
+      );
+      try {
+        await enqueueForSourceParticipation(part._id, session);
+      } catch (err) {
+        console.warn(
+          '[autopool] WR enqueue after release heal failed',
+          String(part._id),
+          err?.message || err
+        );
+      }
+    }
+    return null;
+  }
+  return part;
 }
 
-async function userHasOccupyingAnyPool(userId, session) {
+async function listOccupyingParticipations(userId, session) {
   const list = await AutopoolParticipation.find({
     userId,
     releasedAt: null,
   }).session(session || null);
-  return list.some((p) => !isPoolReleased(p) || p.status !== 'COMPLETED' || !p.releasedAt);
+  const out = [];
+  for (const p of list) {
+    const kept = await coerceOccupyingDoc(p, session);
+    if (kept) out.push(kept);
+  }
+  return out;
 }
 
-/**
- * Simpler occupying check: any doc with releasedAt null counts as occupying.
- */
-async function isUserOccupyingAnyPool(userId, session) {
-  const count = await AutopoolParticipation.countDocuments({
+async function findOccupyingParticipation(userId, poolLevel, session) {
+  const part = await AutopoolParticipation.findOne({
     userId,
+    poolLevel,
     releasedAt: null,
   }).session(session || null);
-  return count > 0;
+  return coerceOccupyingDoc(part, session);
+}
+
+async function userHasOccupyingAnyPool(userId, session) {
+  const list = await listOccupyingParticipations(userId, session);
+  return list.length > 0;
+}
+
+/** True if user has at least one truly occupying participation. */
+async function isUserOccupyingAnyPool(userId, session) {
+  return userHasOccupyingAnyPool(userId, session);
 }
 
 async function joinPool1Manual({
@@ -311,12 +352,10 @@ async function joinPoolManual({
       throw err;
     }
 
-    const otherOccupying = await AutopoolParticipation.countDocuments({
-      userId,
-      poolLevel: { $ne: level },
-      releasedAt: null,
-    }).session(session);
-    if (otherOccupying < 1) {
+    const otherOccupying = (await listOccupyingParticipations(userId, session)).filter(
+      (p) => Number(p.poolLevel) !== level
+    );
+    if (otherOccupying.length < 1) {
       const err = new Error(
         `Manual Pool ${level} entry requires at least one active participation in another pool`
       );
@@ -478,6 +517,8 @@ module.exports = {
   joinPoolManual,
   bootstrapRootUser,
   findOccupyingParticipation,
+  listOccupyingParticipations,
+  coerceOccupyingDoc,
   isUserOccupyingAnyPool,
   userHasOccupyingAnyPool,
   MANUAL_PASS_COST,

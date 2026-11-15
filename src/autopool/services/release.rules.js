@@ -16,6 +16,15 @@ function isPoolReleased(participation) {
   return cyclesDone;
 }
 
+/**
+ * True while the seat still blocks a new entry in that pool.
+ * Matches WR-era rules: maxCycles done ⇒ not occupying even if releasedAt stamp missing.
+ */
+function shouldTreatAsOccupying(participation) {
+  if (!participation) return false;
+  return !isPoolReleased(participation);
+}
+
 function computeReleasedAt(participation, now = new Date()) {
   if (isPoolReleased({ ...participation, releasedAt: null })) {
     return participation.releasedAt || now;
@@ -37,6 +46,7 @@ function shouldReleaseAfterCycle15(participation, now = new Date()) {
 
 module.exports = {
   isPoolReleased,
+  shouldTreatAsOccupying,
   computeReleasedAt,
   shouldReleaseAfterUpgrade,
   shouldReleaseAfterCycle15,

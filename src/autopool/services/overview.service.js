@@ -11,7 +11,11 @@ const {
 const { ensureSettings, seedPoolConfigs, isAutopoolEnabled } = require('./config.service');
 const { getBalance } = require('./referralCredit.service');
 const { isPoolReleased } = require('./release.rules');
-const { findOccupyingParticipation, MANUAL_PASS_COST } = require('./entry.service');
+const {
+  findOccupyingParticipation,
+  listOccupyingParticipations,
+  MANUAL_PASS_COST,
+} = require('./entry.service');
 const { getQueuePosition } = require('./waitingRoom.service');
 
 function calculateWaitingJoinsNeeded(participation, openPlacements) {
@@ -62,11 +66,14 @@ async function buildWaitingRoomInfo(userId, targetPoolLevel, wrSeats, creditBala
 }
 
 async function getOverview(userId) {
-  const [creditBalance, configs, occupying, eligibilities, allUserCycles, settings, wrSeats] =
+  // Heal stuck releasedAt + WR enqueue before reading WR seats
+  const occupyingRaw = await listOccupyingParticipations(userId);
+  const occupying = occupyingRaw.map((p) => (p.toObject ? p.toObject() : p));
+
+  const [creditBalance, configs, eligibilities, allUserCycles, settings, wrSeats] =
     await Promise.all([
       getBalance(userId),
       AutopoolPoolConfig.find({}).sort({ poolLevel: 1 }).lean(),
-      AutopoolParticipation.find({ userId, releasedAt: null }).lean(),
       AutopoolNextPoolEligibility.find({ userId, status: 'AVAILABLE' }).lean(),
       AutopoolCycle.find({ userId }).select('poolLevel cycleNumber walletAmount').lean(),
       ensureSettings(),
@@ -262,16 +269,13 @@ async function getPoolDetail(userId, poolLevel) {
   let joinManual = null;
   if (level === 2 || level === 3) {
     const passesRequired = MANUAL_PASS_COST[level];
-    const occupying = await AutopoolParticipation.find({
-      userId,
-      releasedAt: null,
-    }).lean();
+    const occupying = await listOccupyingParticipations(userId);
     const manualReasons = [];
     const enabled = await isAutopoolEnabled();
     if (!enabled) manualReasons.push('AUTOPOOL_DISABLED');
     if (part) manualReasons.push('POOL_OCCUPYING');
     if (waitingRoom) manualReasons.push('WAITING_ROOM_PENDING');
-    if (!occupying.some((p) => p.poolLevel !== level)) {
+    if (!occupying.some((p) => Number(p.poolLevel) !== level)) {
       manualReasons.push('NO_OTHER_OCCUPYING');
     }
     if (creditBalance < passesRequired) manualReasons.push('NO_UPGRADE_CREDIT');

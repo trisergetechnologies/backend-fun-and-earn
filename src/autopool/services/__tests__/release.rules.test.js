@@ -1,5 +1,6 @@
 const {
   isPoolReleased,
+  shouldTreatAsOccupying,
   shouldReleaseAfterUpgrade,
   shouldReleaseAfterCycle15,
 } = require('../release.rules');
@@ -97,5 +98,29 @@ describe('release.rules (WR-era: release at maxCycles without upgrade)', () => {
         upgradeUsedAt: null,
       })
     ).toBeInstanceOf(Date);
+  });
+
+  test('stuck COMPLETED 5/5 with releasedAt null is not occupying', () => {
+    const stuck = {
+      poolLevel: 1,
+      status: 'COMPLETED',
+      cycleCount: 5,
+      upgradeUsedAt: null,
+      releasedAt: null,
+      configSnapshot: { maxCycles: 5 },
+    };
+    expect(isPoolReleased(stuck)).toBe(true);
+    expect(shouldTreatAsOccupying(stuck)).toBe(false);
+  });
+
+  test('active mid-cycle still occupying', () => {
+    const mid = {
+      poolLevel: 1,
+      status: 'ACTIVE',
+      cycleCount: 3,
+      releasedAt: null,
+      configSnapshot: { maxCycles: 5 },
+    };
+    expect(shouldTreatAsOccupying(mid)).toBe(true);
   });
 });
