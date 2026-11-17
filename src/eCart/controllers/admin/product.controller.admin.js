@@ -11,24 +11,22 @@ const {
   couponSetFromFields,
   couponUnsetForFields,
 } = require("../../helpers/couponConfig");
+const {
+  parsePricingInput,
+  assertDiscountOk,
+  computeProductPricing,
+} = require("../../helpers/productPricing");
 
 exports.addProduct = async (req, res) => {
   try {
     const user = req.user;
 
-    // ✅ Destructure and parse input
     const { title, description, categoryId, sellerId } = req.body;
-    const price = parseFloat(req.body.price);
     const stock = parseInt(req.body.stock);
-    const discountPercent = req.body.discountPercent
-      ? parseFloat(req.body.discountPercent)
-      : 0;
-    const gst = req.body.gst !== undefined && req.body.gst !== ''
-      ? parseFloat(req.body.gst)
-      : 0.05;
+    const pricingInput = parsePricingInput(req.body);
+    const { basePrice, transportCharge, discountAmount, gst } = pricingInput;
 
-    // ✅ Basic validation
-    if (!title || isNaN(price) || isNaN(stock) || !categoryId || !sellerId) {
+    if (!title || isNaN(basePrice) || isNaN(stock) || !categoryId || !sellerId) {
       return res.status(200).json({
         success: false,
         message: 'Missing or invalid required fields',
@@ -36,7 +34,6 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    // ✅ Check category existence
     const categoryExists = await Category.findById(categoryId);
     if (!categoryExists) {
       return res.status(200).json({
@@ -46,20 +43,26 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    // ✅ Discount bounds check
-    if (discountPercent < 0 || discountPercent > 100) {
+    const discountCheck = assertDiscountOk({
+      basePrice,
+      transportCharge,
+      discountAmount,
+    });
+    if (!discountCheck.ok) {
       return res.status(200).json({
         success: false,
-        message: 'Discount must be between 0 and 100',
+        message: discountCheck.message,
         data: null
       });
     }
 
-    // ✅ Calculate final price
-    const finalPrice = +(price - (price * discountPercent) / 100).toFixed(2);
+    const priced = computeProductPricing({
+      basePrice,
+      transportCharge,
+      discountAmount,
+      gst: Number.isFinite(gst) ? gst : 0.05,
+    });
 
-    // ✅ Create product
-    // Parse variations if provided (comes as JSON string from FormData)
     let variations = [];
     if (req.body.variations) {
       try {
@@ -95,11 +98,14 @@ exports.addProduct = async (req, res) => {
       categoryId,
       title,
       description,
-      price,
+      basePrice: priced.basePrice,
+      transportCharge: priced.transportCharge,
+      discountAmount: priced.discountAmount,
+      price: priced.price,
       stock,
-      discountPercent,
-      finalPrice,
-      gst,
+      discountPercent: priced.discountPercent,
+      finalPrice: priced.finalPrice,
+      gst: priced.gst,
       variations,
       createdByRole: user.role,
       images,
@@ -283,7 +289,46 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    const setFields = { ...req.body, images: mergedImages };
+    const pricingTouched =
+      req.body.basePrice !== undefined ||
+      req.body.price !== undefined ||
+      req.body.transportCharge !== undefined ||
+      req.body.discountAmount !== undefined ||
+      req.body.discountPercent !== undefined ||
+      req.body.gst !== undefined;
+
+    let pricingFields = {};
+    if (pricingTouched) {
+      const pricingInput = parsePricingInput(req.body, existing);
+      const discountCheck = assertDiscountOk(pricingInput);
+      if (!discountCheck.ok) {
+        return res.status(200).json({
+          success: false,
+          message: discountCheck.message,
+          data: null,
+        });
+      }
+      const priced = computeProductPricing(pricingInput);
+      pricingFields = {
+        basePrice: priced.basePrice,
+        transportCharge: priced.transportCharge,
+        discountAmount: priced.discountAmount,
+        price: priced.price,
+        finalPrice: priced.finalPrice,
+        discountPercent: priced.discountPercent,
+        gst: priced.gst,
+      };
+      // Prevent stale client values from overwriting derived snapshots
+      delete req.body.price;
+      delete req.body.finalPrice;
+      delete req.body.discountPercent;
+      delete req.body.basePrice;
+      delete req.body.transportCharge;
+      delete req.body.discountAmount;
+      delete req.body.gst;
+    }
+
+    const setFields = { ...req.body, ...pricingFields, images: mergedImages };
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
       unsetCoupon ? { $set: setFields, $unset: unsetCoupon } : setFields,
@@ -298,12 +343,6 @@ exports.updateProduct = async (req, res) => {
         message: 'Product not found',
         data: null,
       });
-    }
-
-    // Recalculate finalPrice if price or discount changed
-    if (req.body.price || req.body.discountPercent) {
-      updatedProduct.finalPrice = +(updatedProduct.price * (1 - updatedProduct.discountPercent / 100)).toFixed(2);
-      await updatedProduct.save();
     }
 
     return res.status(200).json({

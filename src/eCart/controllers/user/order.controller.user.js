@@ -8,6 +8,7 @@ const Order = require('../../models/Order');
 const WalletTransaction = require('../../../models/WalletTransaction');
 const { verifyPayment, logFailedPayment } = require('../../helpers/payment');
 const { couponItemSnapshot } = require('../../helpers/couponConfig');
+const { computeCartPricingBreakdown } = require('../../helpers/productPricing');
 const issueProductCoupons = require('../../helpers/issueProductCoupons');
 const {
   syncCouponCreditAfterEcartDebit,
@@ -105,7 +106,9 @@ exports.placeOrder = async (req, res) => {
       product.stock -= item.quantity;
       await product.save({ session });
     }
-    let grossPayable = subtotal + cart.totalGstAmount + cart.deliveryCharge;
+    // finalPrice is GST-inclusive; do not add GST again into payable
+    const { gstBreakdownAmount } = computeCartPricingBreakdown(cart.items);
+    let grossPayable = subtotal + (cart.deliveryCharge || 0);
 
     // 5. Wallet usage
     let usedWalletAmount = 0;
@@ -142,7 +145,7 @@ exports.placeOrder = async (req, res) => {
       totalAmount: subtotal,
       finalAmountPaid,
       deliveryCharge: cart.deliveryCharge,
-      totalGstAmount: cart.totalGstAmount,
+      totalGstAmount: gstBreakdownAmount,
       paymentStatus: 'paid',
       status: 'placed',
       paymentInfo: {
@@ -170,7 +173,7 @@ exports.placeOrder = async (req, res) => {
         totalAmount: subtotal,
         walletUsed: usedWalletAmount,
         paidAmount: finalAmountPaid,
-        totalGstAmount: cart.totalGstAmount
+        totalGstAmount: gstBreakdownAmount
       }
     });
 
@@ -326,7 +329,9 @@ exports.createOrderIntent = async (req, res) => {
       });
     }
 
-    const grossPayable = subtotal + (cart.totalGstAmount || 0) + cart.deliveryCharge;
+    // finalPrice is GST-inclusive; do not add GST again into payable
+    const { gstBreakdownAmount } = computeCartPricingBreakdown(cart.items);
+    const grossPayable = subtotal + (cart.deliveryCharge || 0);
 
     // Step 5: Wallet usage — compute usedWallet but decrement atomically if > 0
     let usedWalletAmount = 0;
@@ -383,7 +388,7 @@ exports.createOrderIntent = async (req, res) => {
       usedWalletAmount,
       totalAmount: subtotal,
       finalAmountPaid: remaining, // amount expected to be paid via gateway (0 if wallet covered)
-      totalGstAmount: cart.totalGstAmount || 0,
+      totalGstAmount: gstBreakdownAmount,
       deliveryCharge: cart?.deliveryCharge || 0,
       paymentStatus: remaining > 0 ? 'pending' : 'paid',
       status: 'placed',
@@ -654,7 +659,7 @@ exports.createOrderIntent = async (req, res) => {
           totalAmount: subtotal,
           walletUsed: usedWalletAmount,
           paidAmount: 0,
-          totalGstAmount: cart.totalGstAmount || 0
+          totalGstAmount: gstBreakdownAmount
         }
       });
     }
@@ -744,10 +749,10 @@ exports.placeOrderWalletOnly = async (req, res) => {
       await product.save({ session });
     }
 
-    // 4. Wallet check — same payable as gateway path (subtotal + GST + delivery)
-    const gstAmount = Number(cart.totalGstAmount) || 0;
+    // 4. Wallet check — finalPrice is GST-inclusive; payable = inclusive subtotal + delivery
+    const { gstBreakdownAmount: gstAmount } = computeCartPricingBreakdown(cart.items);
     const delivery = Number(cart.deliveryCharge) || 0;
-    const payableTotal = Math.round((subtotal + gstAmount + delivery) * 100) / 100;
+    const payableTotal = Math.round((subtotal + delivery) * 100) / 100;
 
     const walletBalance = userDoc.wallets.eCartWallet;
     if (walletBalance < payableTotal) {
@@ -1364,7 +1369,9 @@ exports.createOrderIntentOrangePG = async (req, res) => {
       });
     }
 
-    const grossPayable = subtotal + (cart.totalGstAmount || 0) + cart.deliveryCharge;
+    // finalPrice is GST-inclusive; do not add GST again into payable
+    const { gstBreakdownAmount } = computeCartPricingBreakdown(cart.items);
+    const grossPayable = subtotal + (cart.deliveryCharge || 0);
 
     // ============================================================
     // STEP 5: Wallet Usage (Atomic Deduction)
@@ -1428,7 +1435,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
       usedWalletAmount,
       totalAmount: subtotal,
       finalAmountPaid: remaining,
-      totalGstAmount: cart.totalGstAmount || 0,
+      totalGstAmount: gstBreakdownAmount,
       deliveryCharge: cart.deliveryCharge,
       paymentStatus: remaining > 0 ? 'pending' : 'paid',
       status: 'placed',
@@ -1507,7 +1514,7 @@ exports.createOrderIntentOrangePG = async (req, res) => {
           totalAmount: subtotal,
           walletUsed: usedWalletAmount,
           paidAmount: 0,
-          totalGstAmount: cart.totalGstAmount || 0
+          totalGstAmount: gstBreakdownAmount
         }
       });
     }

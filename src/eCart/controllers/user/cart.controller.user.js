@@ -1,6 +1,26 @@
 const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
 const Settings = require("../../../models/Settings");
+const {
+  computeCartPricingBreakdown,
+  toCartPricingResponse,
+} = require("../../helpers/productPricing");
+
+async function applyDeliveryCharge(cart) {
+  const settings = await Settings.findOne();
+  if (settings?.deliveryMode === 'always_charge') {
+    cart.deliveryCharge = settings.deliveryChargeAmount || 0;
+  } else if (settings?.deliveryMode === 'free_above_amount') {
+    const subtotal = cart.items.reduce((sum, item) => {
+      return sum + ((item.productId?.finalPrice || 0) * (item.quantity || 1));
+    }, 0);
+    cart.deliveryCharge = subtotal >= (settings.freeDeliveryAbove || 0)
+      ? 0
+      : (settings.deliveryChargeAmount || 0);
+  } else {
+    cart.deliveryCharge = 0;
+  }
+}
 
 exports.getCart = async (req, res) => {
   try {
@@ -13,50 +33,39 @@ exports.getCart = async (req, res) => {
     let cart = await Cart.findOne({ userId: user._id }).populate('items.productId');
 
     if (!cart) {
-      return res.status(200).json({ success: true, message: 'Cart is empty', data: { items: [], useWallet: false } });
+      return res.status(200).json({
+        success: true,
+        message: 'Cart is empty',
+        data: {
+          items: [],
+          useWallet: false,
+          totalGstAmount: 0,
+          exGstSubtotal: 0,
+          gstBreakdownAmount: 0,
+        },
+      });
     }
 
-    // 🔹 Calculate GST dynamically
-    let totalGstAmount = 0;
+    const prevDelivery = cart.deliveryCharge;
+    const prevGst = cart.totalGstAmount;
+    await applyDeliveryCharge(cart);
 
-    cart.items.forEach(item => {
-      if (item.productId) {
-        const basePrice = item.productId.finalPrice || 0;
-        const gstRate = item.productId.gst || 0;
-        const quantity = item.quantity || 1;
+    // BC: persist 0 so old apps never double-add GST on inclusive finalPrice
+    cart.totalGstAmount = 0;
 
-        const gstForItem = basePrice * gstRate * quantity;
-        totalGstAmount += gstForItem;
-      }
-    });
+    const breakdown = computeCartPricingBreakdown(cart.items);
 
-    const settings = await Settings.findOne();
-    if (settings?.deliveryMode === 'always_charge') {
-      cart.deliveryCharge = settings.deliveryChargeAmount || 0;
-    } else if (settings?.deliveryMode === 'free_above_amount') {
-      const subtotal = cart.items.reduce((sum, item) => {
-        return sum + ((item.productId?.finalPrice || 0) * (item.quantity || 1));
-      }, 0);
-      cart.deliveryCharge = subtotal >= (settings.freeDeliveryAbove || 0)
-        ? 0
-        : (settings.deliveryChargeAmount || 0);
-    } else {
-      cart.deliveryCharge = 0;
-    }
-
-    // 🔹 Round to 2 decimals
-    totalGstAmount = Number(totalGstAmount.toFixed(2));
-
-    // 🔹 Save only if change is significant
-    if (Math.abs(cart.totalGstAmount - totalGstAmount) > 0.01) {
-      cart.totalGstAmount = totalGstAmount;
+    if (
+      Math.abs((prevGst || 0) - 0) > 0.01 ||
+      Math.abs((prevDelivery || 0) - (cart.deliveryCharge || 0)) > 0.01
+    ) {
       await cart.save();
     }
 
     return res.status(200).json({
       success: true,
       message: 'Cart fetched successfully',
-      data: cart
+      data: toCartPricingResponse(cart, breakdown),
     });
 
   } catch (err) {

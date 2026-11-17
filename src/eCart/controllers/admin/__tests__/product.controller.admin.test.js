@@ -48,6 +48,9 @@ describe('product.controller.admin', () => {
       expect(Product).toHaveBeenCalled();
       const callArg = Product.mock.calls[0][0];
       expect(callArg.gst).toBe(0.05);
+      expect(callArg.basePrice).toBe(100);
+      expect(callArg.price).toBe(105); // inclusive list
+      expect(callArg.finalPrice).toBe(105);
     });
 
     it('parses gst from body when provided', async () => {
@@ -63,6 +66,37 @@ describe('product.controller.admin', () => {
 
       expect(Product).toHaveBeenCalled();
       expect(Product.mock.calls[0][0].gst).toBe(0.18);
+      expect(Product.mock.calls[0][0].price).toBe(118);
+    });
+
+    it('applies transport and flat discountAmount into inclusive snapshots', async () => {
+      Category.findById.mockResolvedValue({ _id: 'c1' });
+      const req = {
+        user: { role: 'admin' },
+        body: {
+          title: 'Test',
+          description: '',
+          basePrice: 100,
+          transportCharge: 20,
+          discountAmount: 10,
+          stock: 5,
+          categoryId: 'c1',
+          sellerId: 's1',
+          gst: 0.05,
+        },
+        file: null,
+      };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await addProduct(req, res);
+
+      const callArg = Product.mock.calls[0][0];
+      expect(callArg.basePrice).toBe(100);
+      expect(callArg.transportCharge).toBe(20);
+      expect(callArg.discountAmount).toBe(10);
+      expect(callArg.price).toBe(126); // (100+20)*1.05
+      expect(callArg.finalPrice).toBe(115.5); // (120-10)*1.05
+      expect(callArg.discountPercent).toBeCloseTo(8.33, 2);
     });
 
     it('parses variations from JSON string', async () => {
@@ -114,7 +148,16 @@ describe('product.controller.admin', () => {
         images: [],
         save: jest.fn().mockResolvedValue(undefined),
       };
-      Product.findById.mockResolvedValue({ images: ['https://x/old.jpg'] });
+      Product.findById.mockResolvedValue({
+        images: ['https://x/old.jpg'],
+        basePrice: 200,
+        transportCharge: 0,
+        discountAmount: 20,
+        price: 210,
+        finalPrice: 189,
+        discountPercent: 10,
+        gst: 0.05,
+      });
       Product.findByIdAndUpdate.mockReturnValue({
         populate: jest.fn().mockReturnValue({
           populate: jest.fn().mockResolvedValue(updatedDoc),
@@ -155,6 +198,13 @@ describe('product.controller.admin', () => {
       };
       Product.findById.mockResolvedValue({
         images: ['https://x/keep.jpg', 'https://x/remove.jpg'],
+        basePrice: 200,
+        transportCharge: 0,
+        discountAmount: 20,
+        price: 210,
+        finalPrice: 189,
+        discountPercent: 10,
+        gst: 0.05,
       });
       Product.findByIdAndUpdate.mockReturnValue({
         populate: jest.fn().mockReturnValue({

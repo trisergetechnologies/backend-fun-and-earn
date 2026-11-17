@@ -34,12 +34,33 @@ const ProductSchema = new mongoose.Schema({
     },
   },
 
+  // Admin/seller inputs
+  basePrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+
+  transportCharge: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  // Inclusive list/strike snapshot for customer BC (old apps read `price`)
   price: {
     type: Number,
     required: true,
     min: 0
   },
 
+  // Derived % for customer BC badges
   discountPercent: {
     type: Number,
     default: 0,
@@ -47,6 +68,7 @@ const ProductSchema = new mongoose.Schema({
     max: 100
   },
 
+  // Inclusive sell snapshot for customer BC
   finalPrice: {
     type: Number,
     required: true,

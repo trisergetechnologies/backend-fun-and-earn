@@ -5,6 +5,11 @@ const {
   buildImagesForUpdate,
   validateImageCount,
 } = require("../../../utils/productImages");
+const {
+  parsePricingInput,
+  assertDiscountOk,
+  computeProductPricing,
+} = require("../../helpers/productPricing");
 
 function parseVariations(body) {
   if (!body.variations) return [];
@@ -37,16 +42,11 @@ exports.addProduct = async (req, res) => {
     const user = req.user;
 
     const { title, description, categoryId } = req.body;
-    const price = parseFloat(req.body.price);
     const stock = parseInt(req.body.stock, 10);
-    const discountPercent = req.body.discountPercent
-      ? parseFloat(req.body.discountPercent)
-      : 0;
-    const gst = req.body.gst !== undefined && req.body.gst !== ''
-      ? parseFloat(req.body.gst)
-      : 0.05;
+    const pricingInput = parsePricingInput(req.body);
+    const { basePrice, transportCharge, discountAmount, gst } = pricingInput;
 
-    if (!title || isNaN(price) || isNaN(stock) || !categoryId) {
+    if (!title || isNaN(basePrice) || isNaN(stock) || !categoryId) {
       return res.status(200).json({
         success: false,
         message: 'Missing or invalid required fields',
@@ -63,15 +63,26 @@ exports.addProduct = async (req, res) => {
       });
     }
 
-    if (discountPercent < 0 || discountPercent > 100) {
+    const discountCheck = assertDiscountOk({
+      basePrice,
+      transportCharge,
+      discountAmount,
+    });
+    if (!discountCheck.ok) {
       return res.status(200).json({
         success: false,
-        message: 'Discount must be between 0 and 100',
+        message: discountCheck.message,
         data: null,
       });
     }
 
-    const finalPrice = +(price - (price * discountPercent) / 100).toFixed(2);
+    const priced = computeProductPricing({
+      basePrice,
+      transportCharge,
+      discountAmount,
+      gst: Number.isFinite(gst) ? gst : 0.05,
+    });
+
     const variations = parseVariations(req.body);
     const images = buildImagesForCreate(req);
     const imageCheck = validateImageCount(images.length);
@@ -88,11 +99,14 @@ exports.addProduct = async (req, res) => {
       categoryId,
       title,
       description,
-      price,
+      basePrice: priced.basePrice,
+      transportCharge: priced.transportCharge,
+      discountAmount: priced.discountAmount,
+      price: priced.price,
       stock,
-      discountPercent,
-      finalPrice,
-      gst,
+      discountPercent: priced.discountPercent,
+      finalPrice: priced.finalPrice,
+      gst: priced.gst,
       variations,
       createdByRole: user.role,
       images,
@@ -221,18 +235,49 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
+    const pricingTouched =
+      body.basePrice !== undefined ||
+      body.price !== undefined ||
+      body.transportCharge !== undefined ||
+      body.discountAmount !== undefined ||
+      body.discountPercent !== undefined ||
+      body.gst !== undefined;
+
+    let pricingFields = {};
+    if (pricingTouched) {
+      const pricingInput = parsePricingInput(body, existing);
+      const discountCheck = assertDiscountOk(pricingInput);
+      if (!discountCheck.ok) {
+        return res.status(200).json({
+          success: false,
+          message: discountCheck.message,
+          data: null,
+        });
+      }
+      const priced = computeProductPricing(pricingInput);
+      pricingFields = {
+        basePrice: priced.basePrice,
+        transportCharge: priced.transportCharge,
+        discountAmount: priced.discountAmount,
+        price: priced.price,
+        finalPrice: priced.finalPrice,
+        discountPercent: priced.discountPercent,
+        gst: priced.gst,
+      };
+      delete body.price;
+      delete body.finalPrice;
+      delete body.discountPercent;
+      delete body.basePrice;
+      delete body.transportCharge;
+      delete body.discountAmount;
+      delete body.gst;
+    }
+
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
-      { ...body, images: mergedImages },
+      { ...body, ...pricingFields, images: mergedImages },
       { new: true, runValidators: true }
     ).populate('categoryId', 'title slug');
-
-    if (req.body.price || req.body.discountPercent) {
-      updatedProduct.finalPrice = +(
-        updatedProduct.price * (1 - updatedProduct.discountPercent / 100)
-      ).toFixed(2);
-      await updatedProduct.save();
-    }
 
     return res.status(200).json({
       success: true,

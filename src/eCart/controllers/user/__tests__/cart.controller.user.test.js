@@ -44,7 +44,7 @@ describe('cart.controller.user', () => {
     it('applies delivery charge when deliveryMode is always_charge', async () => {
       const cart = {
         items: [
-          { productId: { finalPrice: 100, gst: 0.05 }, quantity: 2 },
+          { productId: { finalPrice: 105, gst: 0.05, basePrice: 100, transportCharge: 0, discountAmount: 0 }, quantity: 2 },
         ],
         totalGstAmount: 0,
         save: jest.fn().mockResolvedValue(undefined),
@@ -63,7 +63,14 @@ describe('cart.controller.user', () => {
 
       expect(cart.deliveryCharge).toBe(50);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ success: true, data: expect.any(Object) })
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            totalGstAmount: 0,
+            exGstSubtotal: 200,
+            gstBreakdownAmount: 10,
+          }),
+        })
       );
     });
 
@@ -141,6 +148,39 @@ describe('cart.controller.user', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ success: false, message: 'Only users can access cart' })
       );
+    });
+
+    it('forces totalGstAmount 0 while exposing gst breakdown (BC)', async () => {
+      const cart = {
+        items: [
+          {
+            productId: {
+              finalPrice: 94.5,
+              gst: 0.05,
+              basePrice: 100,
+              transportCharge: 0,
+              discountAmount: 10,
+            },
+            quantity: 1,
+          },
+        ],
+        totalGstAmount: 9.45,
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      Cart.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(cart) });
+      Settings.findOne.mockResolvedValue({ deliveryMode: 'no_charge' });
+
+      const req = { user: { _id: 'user1', role: 'user' } };
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+      await getCart(req, res);
+
+      expect(cart.totalGstAmount).toBe(0);
+      expect(cart.save).toHaveBeenCalled();
+      const payload = res.json.mock.calls[0][0].data;
+      expect(payload.totalGstAmount).toBe(0);
+      expect(payload.exGstSubtotal).toBe(90);
+      expect(payload.gstBreakdownAmount).toBe(4.5);
     });
   });
 
